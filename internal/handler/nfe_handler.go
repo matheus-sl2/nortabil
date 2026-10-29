@@ -95,3 +95,4 @@ func (h *NFeHandler) ImportXML(w http.ResponseWriter, r *http.Request) {
 
 	JSON(w, http.StatusCreated, result)
 }
+

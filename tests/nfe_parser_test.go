@@ -102,3 +102,4 @@ func TestParseNFeXMLAndAccountingEntry(t *testing.T) {
 		t.Errorf("totais do lançamento contábil incorretos: D=%s, C=%s", entry.TotalDebit, entry.TotalCredit)
 	}
 }
+
