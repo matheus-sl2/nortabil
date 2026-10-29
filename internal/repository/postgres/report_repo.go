@@ -70,7 +70,7 @@ func (r *ReportRepository) GetLedgerReport(ctx context.Context, companyID uuid.U
 				COALESCE(SUM(CASE WHEN jl.type = 'CREDIT' THEN jl.amount ELSE 0 END), 0) AS credits
 			FROM journal_line jl
 			JOIN journal_entry je ON je.id = jl.journal_entry_id
-			WHERE jl.account_id = $1 AND je.company_id = $2 AND je.date < $3 AND je.status = 'POSTED'
+			WHERE jl.account_id = $1 AND je.company_id = $2 AND je.date < $3 AND je.status IN ('POSTED', 'REVERSED')
 		`
 		var prevDebits, prevCredits decimal.Decimal
 		err := r.db.Pool.QueryRow(ctx, initialQuery, acc.ID, companyID, startDate).Scan(&prevDebits, &prevCredits)
@@ -104,7 +104,7 @@ func (r *ReportRepository) GetLedgerReport(ctx context.Context, companyID uuid.U
 				jl.amount
 			FROM journal_line jl
 			JOIN journal_entry je ON je.id = jl.journal_entry_id
-			WHERE jl.account_id = $1 AND je.company_id = $2 AND je.date >= $3 AND je.date <= $4 AND je.status = 'POSTED'
+			WHERE jl.account_id = $1 AND je.company_id = $2 AND je.date >= $3 AND je.date <= $4 AND je.status IN ('POSTED', 'REVERSED')
 			ORDER BY je.date ASC, je.entry_number ASC, jl.created_at ASC
 		`
 		rows, err := r.db.Pool.Query(ctx, movQuery, acc.ID, companyID, startDate, endDate)
@@ -221,7 +221,7 @@ func (r *ReportRepository) GetDailyBookReport(ctx context.Context, companyID uui
 	entryQuery := `
 		SELECT id, company_id, entry_number, date, description, status, total_debit, total_credit, COALESCE(created_by, 'Sistema Contábil'), created_at, updated_at
 		FROM journal_entry
-		WHERE company_id = $1 AND date >= $2 AND date <= $3 AND status = 'POSTED'
+		WHERE company_id = $1 AND date >= $2 AND date <= $3 AND status IN ('POSTED', 'REVERSED')
 		ORDER BY date ASC, entry_number ASC
 	`
 	rows, err := r.db.Pool.Query(ctx, entryQuery, companyID, startDate, endDate)
@@ -331,7 +331,7 @@ func (r *ReportRepository) GetTrialBalanceReport(ctx context.Context, companyID 
 			COALESCE(SUM(CASE WHEN je.date >= $2 AND je.date <= $3 AND jl.type = 'CREDIT' THEN jl.amount ELSE 0 END), 0) AS period_credits
 		FROM journal_line jl
 		JOIN journal_entry je ON je.id = jl.journal_entry_id
-		WHERE je.company_id = $1 AND je.status = 'POSTED' AND je.date <= $3
+		WHERE je.company_id = $1 AND je.status IN ('POSTED', 'REVERSED') AND je.date <= $3
 		GROUP BY jl.account_id
 	`
 	rows, err := r.db.Pool.Query(ctx, summaryQuery, companyID, startDate, endDate)
@@ -449,7 +449,7 @@ func (r *ReportRepository) GetDREReport(ctx context.Context, companyID uuid.UUID
 		FROM journal_line jl
 		JOIN journal_entry je ON je.id = jl.journal_entry_id
 		JOIN account a ON a.id = jl.account_id
-		WHERE je.company_id = $1 AND je.status = 'POSTED' AND je.date >= $2 AND je.date <= $3
+		WHERE je.company_id = $1 AND je.status IN ('POSTED', 'REVERSED') AND je.date >= $2 AND je.date <= $3
 		  AND (a.type IN ('REVENUE', 'EXPENSE') OR a.code LIKE '3%' OR a.code LIKE '4%' OR a.code LIKE '5%')
 		GROUP BY jl.account_id
 	`
@@ -576,7 +576,7 @@ func (r *ReportRepository) GetBalanceSheetReport(ctx context.Context, companyID 
 			COALESCE(SUM(CASE WHEN jl.type = 'CREDIT' THEN jl.amount ELSE 0 END), 0) AS credits
 		FROM journal_line jl
 		JOIN journal_entry je ON je.id = jl.journal_entry_id
-		WHERE je.company_id = $1 AND je.status = 'POSTED' AND je.date <= $2
+		WHERE je.company_id = $1 AND je.status IN ('POSTED', 'REVERSED') AND je.date <= $2
 		GROUP BY jl.account_id
 	`
 	rows, err := r.db.Pool.Query(ctx, query, companyID, refDate)

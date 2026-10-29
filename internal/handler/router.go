@@ -153,6 +153,7 @@ func SetupRouter(
 					je.Post("/batch", journalHandler.CreateBatch)
 					je.Get("/", journalHandler.List)
 					je.Get("/{id}", journalHandler.GetByID)
+					je.Post("/{id}/reverse", journalHandler.Reverse)
 				})
 
 				sub.Route("/reports", func(rep chi.Router) {
@@ -197,6 +198,7 @@ func SetupRouter(
 				je.Post("/batch", journalHandler.CreateBatch)
 				je.Get("/", journalHandler.List)
 				je.Get("/{id}", journalHandler.GetByID)
+				je.Post("/{id}/reverse", journalHandler.Reverse)
 			})
 
 			tenantGroup.Route("/reports", func(rep chi.Router) {

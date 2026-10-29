@@ -214,3 +214,40 @@ func (s *JournalService) GetByID(ctx context.Context, id uuid.UUID) (*domain.Jou
 func (s *JournalService) ListEntries(ctx context.Context, f postgres.ListFilter) ([]domain.JournalEntry, int, error) {
 	return s.journalRepo.List(ctx, f)
 }
+
+// ReverseEntry gera e persiste um lançamento de estorno (partida inversa) conforme a Resolução CFC ITG 2000 (item 31)
+func (s *JournalService) ReverseEntry(ctx context.Context, companyID, entryID uuid.UUID, reason, createdBy string) (*domain.JournalEntry, error) {
+	if companyID == uuid.Nil {
+		companyID = domain.DefaultCompanyID
+	}
+
+	original, err := s.journalRepo.GetByID(ctx, entryID)
+	if err != nil {
+		return nil, err
+	}
+
+	if original.CompanyID != companyID {
+		return nil, domain.ErrMismatchedCompanyTenant
+	}
+
+	if s.periodRepo != nil {
+		isOpen, err := s.periodRepo.IsPeriodOpen(ctx, companyID, original.Date)
+		if err != nil {
+			return nil, err
+		}
+		if !isOpen {
+			return nil, domain.ErrPeriodClosed
+		}
+	}
+
+	reversal, err := original.BuildReversal(original.Date, reason, createdBy)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.journalRepo.ReverseEntry(ctx, original.ID, reversal); err != nil {
+		return nil, err
+	}
+
+	return reversal, nil
+}

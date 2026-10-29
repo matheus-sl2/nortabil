@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -105,5 +106,60 @@ func (e *JournalEntry) Clean() {
 	for i := range e.Lines {
 		e.Lines[i].Description = strings.TrimSpace(e.Lines[i].Description)
 	}
+}
+
+// BuildReversal gera um novo lançamento contábil de estorno (partida inversa) conforme a NBC ITG 2000 (item 31).
+// Lançamentos contábeis são imutáveis; a retificação ocorre invertendo Débitos e Créditos em um novo registro.
+func (e *JournalEntry) BuildReversal(reversalDate time.Time, reason, createdBy string) (*JournalEntry, error) {
+	if e.Status == JournalStatusReversed {
+		return nil, ErrJournalEntryAlreadyReversed
+	}
+
+	reason = strings.TrimSpace(reason)
+	desc := fmt.Sprintf("ESTORNO DO LANÇAMENTO #%d (%s)", e.EntryNumber, e.Description)
+	if reason != "" {
+		desc = fmt.Sprintf("ESTORNO DO LANÇAMENTO #%d: %s (Ref: %s)", e.EntryNumber, reason, e.Description)
+	}
+
+	if createdBy == "" {
+		createdBy = "Sistema Contábil"
+	}
+	if reversalDate.IsZero() {
+		reversalDate = e.Date
+	}
+
+	reversedLines := make([]JournalLine, len(e.Lines))
+	for i, line := range e.Lines {
+		invertedType := JournalLineCredit
+		if line.Type == JournalLineCredit {
+			invertedType = JournalLineDebit
+		}
+		reversedLines[i] = JournalLine{
+			ID:          uuid.New(),
+			AccountID:   line.AccountID,
+			AccountCode: line.AccountCode,
+			AccountName: line.AccountName,
+			Type:        invertedType,
+			Amount:      line.Amount,
+			Description: "Estorno: " + line.Description,
+		}
+	}
+
+	reversal := &JournalEntry{
+		ID:          uuid.New(),
+		CompanyID:   e.CompanyID,
+		Date:        reversalDate,
+		Description: desc,
+		Status:      JournalStatusPosted,
+		CreatedBy:   createdBy,
+		Lines:       reversedLines,
+	}
+
+	reversal.Clean()
+	if err := reversal.ValidateDoubleEntry(); err != nil {
+		return nil, err
+	}
+
+	return reversal, nil
 }
 

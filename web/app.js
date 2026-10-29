@@ -656,14 +656,21 @@ async function loadJournalEntries() {
       return;
     }
 
-    list.innerHTML = entries.map(e => `
-      <div class="p-4 hover:bg-slate-50 transition">
+    list.innerHTML = entries.map(e => {
+      const isReversed = e.status === 'REVERSED';
+      const statusBadge = isReversed
+        ? `<span class="text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300 px-2 py-0.5 rounded ml-2">ESTORNADO</span>`
+        : `<button onclick="handleReverseJournalEntry('${e.id}', ${e.entry_number})" class="text-[10px] font-semibold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 rounded ml-2 transition" title="Gerar Lançamento de Estorno (Partida Inversa - NBC ITG 2000)"><i class="fa-solid fa-rotate-left mr-1"></i>Estornar</button>`;
+
+      return `
+      <div class="p-4 hover:bg-slate-50 transition ${isReversed ? 'opacity-75 bg-slate-50/50' : ''}">
         <div class="flex justify-between items-start mb-2">
           <div>
             <span class="font-mono text-xs font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">#${e.entry_number}</span>
             <span class="text-xs font-semibold text-slate-500 ml-2">${new Date(e.date).toLocaleDateString('pt-BR')}</span>
             ${e.created_by ? `<span class="text-[11px] text-slate-400 ml-2"><i class="fa-solid fa-user-check mr-1"></i>${e.created_by}</span>` : ''}
-            <h4 class="font-semibold text-slate-800 text-sm mt-1">${e.description}</h4>
+            ${statusBadge}
+            <h4 class="font-semibold text-slate-800 text-sm mt-1 ${isReversed ? 'line-through text-slate-500' : ''}">${e.description}</h4>
           </div>
           <span class="font-mono text-xs font-bold text-slate-900 bg-slate-100 px-3 py-1 rounded">R$ ${parseFloat(e.total_debit).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
         </div>
@@ -676,9 +683,33 @@ async function loadJournalEntries() {
           `).join('')}
         </div>
       </div>
-    `).join('');
+    `;
+    }).join('');
   } catch (err) {
     console.error('Erro ao carregar diário:', err);
+  }
+}
+
+async function handleReverseJournalEntry(entryId, entryNumber) {
+  if (!currentCompanyId) return;
+  const reason = prompt(`Confirma o Estorno Contábil (Partida Inversa - NBC ITG 2000) do lançamento #${entryNumber}?\n\nInforme o motivo da retificação:`, 'Retificação de lançamento contábil');
+  if (reason === null) return;
+
+  try {
+    const res = await fetch(`/api/v1/companies/${currentCompanyId}/journal-entries/${entryId}/reverse`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason })
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json.error?.message || json.message || 'Falha ao estornar lançamento');
+    }
+    showAlert(`Lançamento #${entryNumber} estornado com sucesso! Partida inversa #${json.data.entry_number} registrada no Diário.`);
+    await loadJournalEntries();
+    await loadDashboard();
+  } catch (err) {
+    showAlert('Erro ao estornar lançamento: ' + err.message, 'error');
   }
 }
 

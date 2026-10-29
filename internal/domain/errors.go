@@ -79,5 +79,11 @@ var (
 
 	// ErrResultAccountNotFound ocorre quando a conta de Lucros ou Prejuízos Acumulados não foi localizada no ARE.
 	ErrResultAccountNotFound = errors.New("conta de destinação do resultado (Lucros/Prejuízos Acumulados) não encontrada")
+
+	// ErrJournalEntryNotFound ocorre quando o lançamento contábil solicitado não existe.
+	ErrJournalEntryNotFound = errors.New("lançamento contábil não encontrado")
+
+	// ErrJournalEntryAlreadyReversed ocorre quando tenta-se estornar um lançamento que já foi estornado.
+	ErrJournalEntryAlreadyReversed = errors.New("este lançamento contábil já foi estornado anteriormente")
 )
 

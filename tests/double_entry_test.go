@@ -215,3 +215,51 @@ func TestPrecisionDecimalMath(t *testing.T) {
 	}
 }
 
+// TestJournalEntryReversalITG2000 valida o estorno contábil por partida inversa (Resolução CFC ITG 2000)
+func TestJournalEntryReversalITG2000(t *testing.T) {
+	accCaixa := uuid.New()
+	accFornecedor := uuid.New()
+	valor := decimal.RequireFromString("2750.40")
+
+	original := domain.JournalEntry{
+		ID:          uuid.New(),
+		CompanyID:   domain.DefaultCompanyID,
+		EntryNumber: 42,
+		Date:        time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC),
+		Description: "Pagamento de duplicata em duplicidade",
+		Status:      domain.JournalStatusPosted,
+		Lines: []domain.JournalLine{
+			{AccountID: accFornecedor, Type: domain.JournalLineDebit, Amount: valor, Description: "Baixa fornecedor"},
+			{AccountID: accCaixa, Type: domain.JournalLineCredit, Amount: valor, Description: "Saída de caixa"},
+		},
+	}
+
+	if err := original.ValidateDoubleEntry(); err != nil {
+		t.Fatalf("Lançamento original deveria ser válido: %v", err)
+	}
+
+	reversal, err := original.BuildReversal(original.Date, "Pagamento lançado em duplicidade", "Contador CRC-MG")
+	if err != nil {
+		t.Fatalf("Falha ao construir estorno contábil: %v", err)
+	}
+
+	if !reversal.TotalDebit.Equal(valor) || !reversal.TotalCredit.Equal(valor) {
+		t.Fatalf("Total do estorno (%v / %v) diverge do original (%v)", reversal.TotalDebit, reversal.TotalCredit, valor)
+	}
+
+	// Verifica se as naturezas foram exatamente invertidas (Débito <-> Crédito)
+	if reversal.Lines[0].Type != domain.JournalLineCredit || reversal.Lines[1].Type != domain.JournalLineDebit {
+		t.Fatalf("Partidas do estorno não inverteram Débito e Crédito corretamente")
+	}
+
+	if reversal.ID == uuid.Nil || reversal.CompanyID != original.CompanyID || reversal.Status != domain.JournalStatusPosted || reversal.CreatedBy == "" {
+		t.Fatalf("Metadados do lançamento de estorno inconsistentes: %+v", reversal)
+	}
+
+	// Simula marcação como REVERSED e garante bloqueio de duplo estorno
+	original.Status = domain.JournalStatusReversed
+	if _, err := original.BuildReversal(original.Date, "Tentativa duplicada", "Contador"); err != domain.ErrJournalEntryAlreadyReversed {
+		t.Fatalf("Esperava erro ErrJournalEntryAlreadyReversed, mas obteve: %v", err)
+	}
+}
+

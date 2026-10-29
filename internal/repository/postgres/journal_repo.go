@@ -103,6 +103,98 @@ func (r *JournalRepository) CreateEntry(ctx context.Context, entry *domain.Journ
 	return nil
 }
 
+// ReverseEntry marca o lançamento original como REVERSED e persiste o novo lançamento de estorno (partida inversa) na mesma transação ACID
+func (r *JournalRepository) ReverseEntry(ctx context.Context, originalID uuid.UUID, reversal *domain.JournalEntry) error {
+	tx, err := r.db.Pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("falha ao iniciar transação de estorno: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	now := time.Now()
+
+	// 1. Marca o lançamento original como REVERSED (impede duplo estorno sob concorrência)
+	tag, err := tx.Exec(ctx, `
+		UPDATE journal_entry
+		SET status = $1, updated_at = $2
+		WHERE id = $3 AND status = $4
+	`, domain.JournalStatusReversed, now, originalID, domain.JournalStatusPosted)
+	if err != nil {
+		return fmt.Errorf("falha ao atualizar status do lançamento original: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return domain.ErrJournalEntryAlreadyReversed
+	}
+
+	// 2. Insere o cabeçalho do lançamento de estorno
+	if reversal.ID == uuid.Nil {
+		reversal.ID = uuid.New()
+	}
+	if reversal.Status == "" {
+		reversal.Status = domain.JournalStatusPosted
+	}
+	if reversal.CreatedBy == "" {
+		reversal.CreatedBy = "Sistema Contábil"
+	}
+	reversal.CreatedAt = now
+	reversal.UpdatedAt = now
+
+	entryQuery := `
+		INSERT INTO journal_entry (id, company_id, date, description, status, total_debit, total_credit, created_by, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		RETURNING entry_number
+	`
+	err = tx.QueryRow(ctx, entryQuery,
+		reversal.ID,
+		reversal.CompanyID,
+		reversal.Date,
+		reversal.Description,
+		reversal.Status,
+		reversal.TotalDebit,
+		reversal.TotalCredit,
+		reversal.CreatedBy,
+		reversal.CreatedAt,
+		reversal.UpdatedAt,
+	).Scan(&reversal.EntryNumber)
+	if err != nil {
+		return fmt.Errorf("falha ao inserir cabeçalho do estorno: %w", err)
+	}
+
+	// 3. Insere as partidas inversas do estorno
+	lineQuery := `
+		INSERT INTO journal_line (id, journal_entry_id, account_id, type, amount, description, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`
+	for i := range reversal.Lines {
+		line := &reversal.Lines[i]
+		if line.ID == uuid.Nil {
+			line.ID = uuid.New()
+		}
+		line.JournalEntryID = reversal.ID
+		line.CreatedAt = now
+
+		_, err = tx.Exec(ctx, lineQuery,
+			line.ID,
+			line.JournalEntryID,
+			line.AccountID,
+			line.Type,
+			line.Amount,
+			line.Description,
+			line.CreatedAt,
+		)
+		if err != nil {
+			return fmt.Errorf("falha ao inserir partida de estorno (linha %d): %w", i+1, err)
+		}
+	}
+
+	// 4. Confirma transação ACID (executando o trigger deferido do banco)
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("falha na confirmação (COMMIT) do estorno contábil: %w", err)
+	}
+
+	return nil
+}
+
 // GetByID busca um lançamento pelo seu ID incluindo todas as partidas contábeis
 func (r *JournalRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.JournalEntry, error) {
 	entryQuery := `
@@ -126,7 +218,7 @@ func (r *JournalRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, errors.New("lançamento contábil não encontrado")
+			return nil, domain.ErrJournalEntryNotFound
 		}
 		return nil, fmt.Errorf("erro ao buscar cabeçalho do lançamento: %w", err)
 	}

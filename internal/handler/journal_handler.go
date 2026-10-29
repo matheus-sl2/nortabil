@@ -131,3 +131,33 @@ func (h *JournalHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	JSON(w, http.StatusOK, response)
 }
+
+type reverseEntryInput struct {
+	Reason string `json:"reason,omitempty"`
+}
+
+// Reverse executa o estorno contábil oficial (partida inversa) de um lançamento no Livro Diário
+func (h *JournalHandler) Reverse(w http.ResponseWriter, r *http.Request) {
+	idParam := chi.URLParam(r, "id")
+	entryID, err := uuid.Parse(idParam)
+	if err != nil {
+		JSONError(w, http.StatusBadRequest, "INVALID_UUID", "Identificador UUID do lançamento inválido", nil)
+		return
+	}
+
+	var input reverseEntryInput
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&input)
+	}
+
+	companyID := middleware.GetCompanyID(r)
+	createdBy := middleware.GetUserIdentity(r)
+
+	reversal, err := h.service.ReverseEntry(r.Context(), companyID, entryID, input.Reason, createdBy)
+	if err != nil {
+		HandleDomainError(w, err)
+		return
+	}
+
+	JSON(w, http.StatusCreated, reversal)
+}

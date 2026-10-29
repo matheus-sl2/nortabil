@@ -180,7 +180,7 @@ func (r *PeriodRepository) GetResultAccountsBalances(ctx context.Context, compan
 		  AND a.is_synthetic = FALSE
 		  AND a.type IN ('REVENUE', 'EXPENSE')
 		  AND je.date >= $2 AND je.date <= $3
-		  AND je.status = 'POSTED'
+		  AND je.status IN ('POSTED', 'REVERSED')
 		GROUP BY a.id, a.code, a.type
 	`
 	rows, err := r.db.Pool.Query(ctx, query, companyID, startDate, endDate)
