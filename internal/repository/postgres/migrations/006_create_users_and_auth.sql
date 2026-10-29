@@ -40,5 +40,6 @@ VALUES
         'MG-085421/O',
         TRUE
     )
-ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash;
+-- DO NOTHING: as migrações rodam a cada inicialização; não sobrescrever senhas alteradas pelos usuários
+ON CONFLICT (email) DO NOTHING;
 

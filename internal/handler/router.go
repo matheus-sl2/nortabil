@@ -124,9 +124,10 @@ func SetupRouter(
 		if authHandler != nil {
 			api.Route("/auth", func(auth chi.Router) {
 				auth.Post("/login", authHandler.Login)
-				auth.Post("/register", authHandler.Register)
 				auth.Get("/me", authHandler.Me)
-				auth.Get("/users", authHandler.ListUsers)
+				// Gestão de usuários restrita ao perfil ADMIN (impede autocadastro de administradores)
+				auth.With(middleware.RequireRole(domain.RoleAdmin)).Post("/register", authHandler.Register)
+				auth.With(middleware.RequireRole(domain.RoleAdmin)).Get("/users", authHandler.ListUsers)
 			})
 		}
 
