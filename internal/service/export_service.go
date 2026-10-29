@@ -150,7 +150,7 @@ func (s *ExportService) ExportPrintableHTML(ctx context.Context, companyID uuid.
 	emitidoEm := time.Now().Format("02/01/2006 15:04:05")
 
 	var sb strings.Builder
-	sb.WriteString(`<!DOCTYPE html>
+	fmt.Fprintf(&sb, `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
@@ -162,7 +162,7 @@ func (s *ExportService) ExportPrintableHTML(ctx context.Context, companyID uuid.
     .header h1 { margin: 0; font-size: 16px; color: #1e3a8a; }
     .header p { margin: 2px 0; color: #555; }
     .title-box { background: #f1f5f9; padding: 8px 12px; font-weight: bold; font-size: 13px; text-transform: uppercase; margin-bottom: 12px; border-left: 4px solid #1e3a8a; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 10px; }
+    table { width: 100%%; border-collapse: collapse; margin-bottom: 20px; font-size: 10px; }
     th { background: #f8fafc; border: 1px solid #cbd5e1; padding: 6px; text-align: left; font-weight: bold; }
     td { border: 1px solid #e2e8f0; padding: 5px 6px; }
     .text-right { text-align: right; }
@@ -170,7 +170,7 @@ func (s *ExportService) ExportPrintableHTML(ctx context.Context, companyID uuid.
     .bg-total { background: #f8fafc; font-weight: bold; }
     .footer { margin-top: 40px; border-top: 1px solid #cbd5e1; padding-top: 20px; }
     .signatures { display: flex; justify-content: space-around; margin-top: 50px; }
-    .sig-line { width: 40%; text-align: center; border-top: 1px solid #333; padding-top: 5px; font-size: 10px; }
+    .sig-line { width: 40%%; text-align: center; border-top: 1px solid #333; padding-top: 5px; font-size: 10px; }
     @media print {
       .no-print { display: none; }
       body { padding: 0; }
@@ -184,11 +184,11 @@ func (s *ExportService) ExportPrintableHTML(ctx context.Context, companyID uuid.
     </button>
   </div>
   <div class="header">
-    <h1>` + company.LegalName + `</h1>
-    <p>CNPJ: ` + company.CNPJ + ` | Município: ` + company.City + ` - ` + company.State + `</p>
-    <p>Regime Tributário: ` + string(company.TaxRegime) + ` | Escrituração Contábil Oficial</p>
+    <h1>%s</h1>
+    <p>CNPJ: %s | Município: %s - %s</p>
+    <p>Regime Tributário: %s | Escrituração Contábil Oficial</p>
   </div>
-`)
+`, company.LegalName, company.CNPJ, company.City, company.State, string(company.TaxRegime))
 
 	switch strings.ToLower(reportType) {
 	case "dre":
@@ -196,26 +196,26 @@ func (s *ExportService) ExportPrintableHTML(ctx context.Context, companyID uuid.
 		if err != nil {
 			return "", err
 		}
-		sb.WriteString(`
-  <div class="title-box">DEMONSTRAÇÃO DO RESULTADO DO EXERCÍCIO (DRE) - Período: ` + dtIni + ` a ` + dtFin + `</div>
+		fmt.Fprintf(&sb, `
+  <div class="title-box">DEMONSTRAÇÃO DO RESULTADO DO EXERCÍCIO (DRE) - Período: %s a %s</div>
   <table>
     <thead>
       <tr>
-        <th style="width: 10%;">Item</th>
-        <th style="width: 65%;">Descrição das Contas de Resultado</th>
-        <th style="width: 25%; text-align: right;">Valor (R$)</th>
+        <th style="width: 10%%;">Item</th>
+        <th style="width: 65%%;">Descrição das Contas de Resultado</th>
+        <th style="width: 25%%; text-align: right;">Valor (R$)</th>
       </tr>
     </thead>
     <tbody>
-`)
+`, dtIni, dtFin)
 		for _, l := range dre.Lines {
 			rowClass := ""
 			if l.IsTotal {
 				rowClass = " class=\"bg-total\""
 			}
 			valStr := strings.ReplaceAll(l.Amount.StringFixed(2), ".", ",")
-			sb.WriteString(fmt.Sprintf("<tr%s><td>%d</td><td>%s</td><td class=\"text-right\">R$ %s</td></tr>\n",
-				rowClass, l.Order, l.Description, valStr))
+			fmt.Fprintf(&sb, "<tr%s><td>%d</td><td>%s</td><td class=\"text-right\">R$ %s</td></tr>\n",
+				rowClass, l.Order, l.Description, valStr)
 		}
 		sb.WriteString(`</tbody></table>`)
 
@@ -224,26 +224,26 @@ func (s *ExportService) ExportPrintableHTML(ctx context.Context, companyID uuid.
 		if err != nil {
 			return "", err
 		}
-		sb.WriteString(`
-  <div class="title-box">BALANÇO PATRIMONIAL ESTRUTURADO - Posição em ` + dtFin + `</div>
+		fmt.Fprintf(&sb, `
+  <div class="title-box">BALANÇO PATRIMONIAL ESTRUTURADO - Posição em %s</div>
   <div style="display: flex; gap: 20px;">
     <div style="flex: 1;">
       <h3 style="color: #1e3a8a; margin-top: 0;">ATIVO</h3>
       <table>
         <thead><tr><th>Conta</th><th class="text-right">Saldo</th></tr></thead>
         <tbody>
-`)
+`, dtFin)
 		for _, l := range bs.AssetLines {
 			rowClass := ""
 			if l.IsSynthetic {
 				rowClass = " class=\"font-bold\""
 			}
 			valStr := strings.ReplaceAll(l.Amount.StringFixed(2), ".", ",")
-			sb.WriteString(fmt.Sprintf("<tr%s><td>%s %s</td><td class=\"text-right\">R$ %s</td></tr>\n",
-				rowClass, l.AccountCode, l.AccountName, valStr))
+			fmt.Fprintf(&sb, "<tr%s><td>%s %s</td><td class=\"text-right\">R$ %s</td></tr>\n",
+				rowClass, l.AccountCode, l.AccountName, valStr)
 		}
-		sb.WriteString(fmt.Sprintf("<tr class=\"bg-total\"><td>TOTAL DO ATIVO</td><td class=\"text-right\">R$ %s</td></tr>",
-			strings.ReplaceAll(bs.TotalAsset.StringFixed(2), ".", ",")))
+		fmt.Fprintf(&sb, "<tr class=\"bg-total\"><td>TOTAL DO ATIVO</td><td class=\"text-right\">R$ %s</td></tr>",
+			strings.ReplaceAll(bs.TotalAsset.StringFixed(2), ".", ","))
 		sb.WriteString(`</tbody></table></div>
     <div style="flex: 1;">
       <h3 style="color: #1e3a8a; margin-top: 0;">PASSIVO E PATRIMÔNIO LÍQUIDO</h3>
@@ -257,11 +257,11 @@ func (s *ExportService) ExportPrintableHTML(ctx context.Context, companyID uuid.
 				rowClass = " class=\"font-bold\""
 			}
 			valStr := strings.ReplaceAll(l.Amount.StringFixed(2), ".", ",")
-			sb.WriteString(fmt.Sprintf("<tr%s><td>%s %s</td><td class=\"text-right\">R$ %s</td></tr>\n",
-				rowClass, l.AccountCode, l.AccountName, valStr))
+			fmt.Fprintf(&sb, "<tr%s><td>%s %s</td><td class=\"text-right\">R$ %s</td></tr>\n",
+				rowClass, l.AccountCode, l.AccountName, valStr)
 		}
-		sb.WriteString(fmt.Sprintf("<tr class=\"bg-total\"><td>TOTAL DO PASSIVO + PL</td><td class=\"text-right\">R$ %s</td></tr>",
-			strings.ReplaceAll(bs.TotalLiabilityAndEquity.StringFixed(2), ".", ",")))
+		fmt.Fprintf(&sb, "<tr class=\"bg-total\"><td>TOTAL DO PASSIVO + PL</td><td class=\"text-right\">R$ %s</td></tr>",
+			strings.ReplaceAll(bs.TotalLiabilityAndEquity.StringFixed(2), ".", ","))
 		sb.WriteString(`</tbody></table></div></div>`)
 
 	default: // Balancete
@@ -269,8 +269,8 @@ func (s *ExportService) ExportPrintableHTML(ctx context.Context, companyID uuid.
 		if err != nil {
 			return "", err
 		}
-		sb.WriteString(`
-  <div class="title-box">BALANCETE DE VERIFICAÇÃO - Período: ` + dtIni + ` a ` + dtFin + `</div>
+		fmt.Fprintf(&sb, `
+  <div class="title-box">BALANCETE DE VERIFICAÇÃO - Período: %s a %s</div>
   <table>
     <thead>
       <tr>
@@ -283,7 +283,7 @@ func (s *ExportService) ExportPrintableHTML(ctx context.Context, companyID uuid.
       </tr>
     </thead>
     <tbody>
-`)
+`, dtIni, dtFin)
 		for _, it := range report.Items {
 			rowClass := ""
 			if it.IsSynthetic {
@@ -293,24 +293,24 @@ func (s *ExportService) ExportPrintableHTML(ctx context.Context, companyID uuid.
 			debStr := strings.ReplaceAll(it.PeriodDebit.StringFixed(2), ".", ",")
 			credStr := strings.ReplaceAll(it.PeriodCredit.StringFixed(2), ".", ",")
 			finStr := strings.ReplaceAll(it.FinalBalance.StringFixed(2), ".", ",")
-			sb.WriteString(fmt.Sprintf("<tr%s><td>%s</td><td>%s</td><td class=\"text-right\">%s %s</td><td class=\"text-right\">%s</td><td class=\"text-right\">%s</td><td class=\"text-right\">%s %s</td></tr>\n",
-				rowClass, it.AccountCode, it.AccountName, initStr, it.InitialNature, debStr, credStr, finStr, it.FinalNature))
+			fmt.Fprintf(&sb, "<tr%s><td>%s</td><td>%s</td><td class=\"text-right\">%s %s</td><td class=\"text-right\">%s</td><td class=\"text-right\">%s</td><td class=\"text-right\">%s %s</td></tr>\n",
+				rowClass, it.AccountCode, it.AccountName, initStr, it.InitialNature, debStr, credStr, finStr, it.FinalNature)
 		}
 		totDeb := strings.ReplaceAll(report.TotalPeriodDebit.StringFixed(2), ".", ",")
 		totCred := strings.ReplaceAll(report.TotalPeriodCredit.StringFixed(2), ".", ",")
-		sb.WriteString(fmt.Sprintf("<tr class=\"bg-total\"><td colspan=\"3\">TOTAIS DO PERÍODO</td><td class=\"text-right\">R$ %s</td><td class=\"text-right\">R$ %s</td><td></td></tr>",
-			totDeb, totCred))
+		fmt.Fprintf(&sb, "<tr class=\"bg-total\"><td colspan=\"3\">TOTAIS DO PERÍODO</td><td class=\"text-right\">R$ %s</td><td class=\"text-right\">R$ %s</td><td></td></tr>",
+			totDeb, totCred)
 		sb.WriteString(`</tbody></table>`)
 	}
 
 	// Termos e Assinaturas
-	sb.WriteString(`
+	fmt.Fprintf(&sb, `
   <div class="footer">
-    <p style="text-align: right; color: #777;">Documento gerado eletronicamente pelo Sistema NORTABIL em ` + emitidoEm + `</p>
+    <p style="text-align: right; color: #777;">Documento gerado eletronicamente pelo Sistema NORTABIL em %s</p>
     <div class="signatures">
       <div class="sig-line">
-        <strong>` + company.LegalName + `</strong><br>
-        Representante Legal - CNPJ ` + company.CNPJ + `
+        <strong>%s</strong><br>
+        Representante Legal - CNPJ %s
       </div>
       <div class="sig-line">
         <strong>CONTADOR RESPONSÁVEL TÉCNICO</strong><br>
@@ -319,7 +319,7 @@ func (s *ExportService) ExportPrintableHTML(ctx context.Context, companyID uuid.
     </div>
   </div>
 </body>
-</html>`)
+</html>`, emitidoEm, company.LegalName, company.CNPJ)
 
 	return sb.String(), nil
 }
