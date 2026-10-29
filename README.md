@@ -190,19 +190,21 @@ PASS
 
 ---
 
-## 7. Carga de Demonstração (Fatos Contábeis Reais)
+## 7. Carga de Demonstração e Roteiro para a Banca Examinadora
 
-Para popular a base de dados com cenários reais de uma empresa do Norte de Minas Gerais (integralização de capital, compras a prazo, vendas à vista/a prazo, apropriação de folha de pagamento, despesas operacionais e cálculo de CMV):
-
-```bash
-go run ./scripts/demo_data.go
-```
-
-Após rodar o script, você pode consultar o **Balancete de Verificação** e o **Livro Razão** diretamente no Swagger (`/swagger`) ou via curl:
+### 7.1 Carga Demonstrativa Regional (Norte de Minas Gerais)
+Para popular a base de dados com cenários reais de empresas do Norte de Minas Gerais (**Fruticultura Vale do Jaíba Ltda** e **Distribuidora Comercial Montes Claros Ltda**):
 
 ```bash
-curl -X GET "http://localhost:8080/api/v1/reports/trial-balance"
+make seed
+# Ou diretamente em Go:
+go run ./cmd/seed/main.go
 ```
+
+### 7.2 Roteiro e Material Completo de Defesa para a Banca
+O repositório inclui um guia completo com orientações minuto a minuto, comandos de demonstração prática e respostas fundamentadas às perguntas prováveis da banca examinadora:
+* 📖 **[Roteiro de Defesa da Banca Examinadora (TCC)](docs/ROTEIRO_DEFESA_TCC.md)**
+* 📊 **[Relatório Científico de Benchmarking e Estresse Transacional](docs/BENCHMARK.md)**
 
 ---
 
@@ -210,5 +212,8 @@ curl -X GET "http://localhost:8080/api/v1/reports/trial-balance"
 
 * **Repositório do Projeto:** [github.com/matheus-sl2/nortabil](https://github.com/matheus-sl2/nortabil.git)
 * **Repositório de Legislação de Consulta:** [github.com/ctresb/leis](https://github.com/ctresb/leis.git)
-* **Idioma oficial de commits e comentários:** Português do Brasil (pt-BR).
+* **Pipeline de Integração Contínua (CI/CD):** GitHub Actions configurado em `.github/workflows/ci.yml`
+* **Interface Web Contábil:** Disponível em `http://localhost:8080/dashboard`
+* **Documentação Interativa da API (Swagger):** Disponível em `http://localhost:8080/swagger/index.html`
+* **Idioma oficial de commits, documentações e comentários:** Português do Brasil (pt-BR).
 
