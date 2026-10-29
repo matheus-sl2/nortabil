@@ -1,0 +1,53 @@
+name: CI Contábil Nortabil
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-and-build:
+    name: Testes Unitários, Integridade e Compilação
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: nortabil_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Ambiente Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Verificar Integridade das Dependências
+        run: |
+          go mod verify
+
+      - name: Executar Testes Unitários e Validação de Partidas Dobradas
+        run: |
+          go test -v -race ./tests/...
+
+      - name: Compilar Binário da API
+        run: |
+          CGO_ENABLED=0 go build -v -o nortabil-api ./cmd/api
+
+      - name: Validar Build da Imagem Docker
+        run: |
+          docker build -t nortabil-api:ci .
