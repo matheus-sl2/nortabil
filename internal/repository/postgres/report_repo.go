@@ -710,3 +710,139 @@ func (r *ReportRepository) GetBalanceSheetReport(ctx context.Context, companyID 
 	return report, nil
 }
 
+// GetCashFlowReport gera a Demonstração dos Fluxos de Caixa (DFC - Método Direto conforme NBC TG 03 / CPC 03)
+func (r *ReportRepository) GetCashFlowReport(ctx context.Context, companyID uuid.UUID, startDate, endDate time.Time) (*domain.CashFlowReport, error) {
+	if companyID == uuid.Nil {
+		companyID = domain.DefaultCompanyID
+	}
+
+	dfc := &domain.CashFlowReport{
+		CompanyID:          companyID,
+		StartDate:          startDate,
+		EndDate:            endDate,
+		GeneratedAt:        time.Now().UTC(),
+		InitialCashBalance: decimal.Zero,
+		OperatingInflows:   decimal.Zero,
+		OperatingOutflows:  decimal.Zero,
+		InvestingInflows:   decimal.Zero,
+		InvestingOutflows:  decimal.Zero,
+		FinancingInflows:   decimal.Zero,
+		FinancingOutflows:  decimal.Zero,
+	}
+
+	// 1. Saldo Inicial das contas de Disponibilidades (1.1.01 - Caixa e Equivalentes de Caixa) antes de startDate
+	initQuery := `
+		SELECT
+			COALESCE(SUM(CASE WHEN jl.type = 'DEBIT' THEN jl.amount ELSE -jl.amount END), 0) AS initial_cash
+		FROM journal_line jl
+		JOIN journal_entry je ON je.id = jl.journal_entry_id
+		JOIN account a ON a.id = jl.account_id
+		WHERE je.company_id = $1
+		  AND je.status IN ('POSTED', 'REVERSED')
+		  AND je.date < $2
+		  AND a.is_synthetic = FALSE
+		  AND a.code LIKE '1.1.01%'
+	`
+	if err := r.db.Pool.QueryRow(ctx, initQuery, companyID, startDate).Scan(&dfc.InitialCashBalance); err != nil {
+		return nil, fmt.Errorf("erro ao calcular saldo inicial de caixa para DFC: %w", err)
+	}
+
+	// 2. Busca todas as partidas dos lançamentos do período para classificar o efeito líquido no caixa por lançamento
+	periodQuery := `
+		SELECT
+			je.id,
+			a.code,
+			a.type,
+			jl.type,
+			jl.amount
+		FROM journal_line jl
+		JOIN journal_entry je ON je.id = jl.journal_entry_id
+		JOIN account a ON a.id = jl.account_id
+		WHERE je.company_id = $1
+		  AND je.status IN ('POSTED', 'REVERSED')
+		  AND je.date >= $2 AND je.date <= $3
+		ORDER BY je.date ASC, je.entry_number ASC
+	`
+	rows, err := r.db.Pool.Query(ctx, periodQuery, companyID, startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao consultar movimentações do período para DFC: %w", err)
+	}
+	defer rows.Close()
+
+	type entryPart struct {
+		accCode  string
+		accType  domain.AccountType
+		lineType domain.JournalLineType
+		amount   decimal.Decimal
+	}
+
+	var entryOrder []uuid.UUID
+	byEntry := make(map[uuid.UUID][]entryPart)
+
+	for rows.Next() {
+		var entryID uuid.UUID
+		var p entryPart
+		if err := rows.Scan(&entryID, &p.accCode, &p.accType, &p.lineType, &p.amount); err != nil {
+			return nil, fmt.Errorf("erro ao ler partida para DFC: %w", err)
+		}
+		if _, exists := byEntry[entryID]; !exists {
+			entryOrder = append(entryOrder, entryID)
+		}
+		byEntry[entryID] = append(byEntry[entryID], p)
+	}
+
+	// 3. Para cada lançamento contábil, calcula a variação líquida de Caixa (1.1.01%) e classifica pela contrapartida
+	for _, entryID := range entryOrder {
+		parts := byEntry[entryID]
+		netCash := decimal.Zero
+		category := "OPERATING"
+
+		for _, p := range parts {
+			if strings.HasPrefix(p.accCode, "1.1.01") {
+				if p.lineType == domain.JournalLineDebit {
+					netCash = netCash.Add(p.amount)
+				} else {
+					netCash = netCash.Sub(p.amount)
+				}
+			} else {
+				// Contrapartida fora de Disponibilidades define a natureza do fluxo (NBC TG 03)
+				switch {
+				case strings.HasPrefix(p.accCode, "1.2"):
+					category = "INVESTING"
+				case p.accType == domain.AccountTypeEquity || strings.HasPrefix(p.accCode, "2.2") || strings.HasPrefix(p.accCode, "2.3") || strings.HasPrefix(p.accCode, "3"):
+					category = "FINANCING"
+				}
+			}
+		}
+
+		// Se netCash == 0 (ex: transferência interna entre Caixa e Banco ou lançamento sem efeito caixa), ignora
+		if netCash.IsZero() {
+			continue
+		}
+
+		switch category {
+		case "INVESTING":
+			if netCash.IsPositive() {
+				dfc.InvestingInflows = dfc.InvestingInflows.Add(netCash)
+			} else {
+				dfc.InvestingOutflows = dfc.InvestingOutflows.Add(netCash.Abs())
+			}
+		case "FINANCING":
+			if netCash.IsPositive() {
+				dfc.FinancingInflows = dfc.FinancingInflows.Add(netCash)
+			} else {
+				dfc.FinancingOutflows = dfc.FinancingOutflows.Add(netCash.Abs())
+			}
+		default:
+			if netCash.IsPositive() {
+				dfc.OperatingInflows = dfc.OperatingInflows.Add(netCash)
+			} else {
+				dfc.OperatingOutflows = dfc.OperatingOutflows.Add(netCash.Abs())
+			}
+		}
+	}
+
+	dfc.FinalizeCashFlowReport()
+	return dfc, nil
+}
+

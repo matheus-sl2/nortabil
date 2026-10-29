@@ -172,3 +172,47 @@ func TestCalculateFinancialIndicators(t *testing.T) {
 	}
 }
 
+// TestCashFlowStatementNBCTG03 valida a Demonstração dos Fluxos de Caixa pelo Método Direto (NBC TG 03)
+func TestCashFlowStatementNBCTG03(t *testing.T) {
+	companyID := uuid.New()
+	now := time.Now().UTC()
+
+	dfc := &domain.CashFlowReport{
+		CompanyID:          companyID,
+		StartDate:          now.AddDate(0, -1, 0),
+		EndDate:            now,
+		GeneratedAt:        now,
+		InitialCashBalance: decimal.RequireFromString("50000.00"),
+		OperatingInflows:   decimal.RequireFromString("180000.00"),
+		OperatingOutflows:  decimal.RequireFromString("95000.00"),
+		InvestingInflows:   decimal.Zero,
+		InvestingOutflows:  decimal.RequireFromString("40000.00"),
+		FinancingInflows:   decimal.RequireFromString("100000.00"),
+		FinancingOutflows:  decimal.RequireFromString("15000.00"),
+	}
+
+	dfc.FinalizeCashFlowReport()
+
+	if dfc.CompanyID != companyID || dfc.StartDate.IsZero() || dfc.EndDate.IsZero() || dfc.GeneratedAt.IsZero() {
+		t.Error("metadados da DFC inválidos")
+	}
+	if !dfc.NetOperatingCash.Equal(decimal.RequireFromString("85000.00")) {
+		t.Errorf("Caixa Operacional Líquido esperado 85000.00, obtido %s", dfc.NetOperatingCash)
+	}
+	if !dfc.NetInvestingCash.Equal(decimal.RequireFromString("-40000.00")) {
+		t.Errorf("Caixa de Investimento esperado -40000.00, obtido %s", dfc.NetInvestingCash)
+	}
+	if !dfc.NetFinancingCash.Equal(decimal.RequireFromString("85000.00")) {
+		t.Errorf("Caixa de Financiamento esperado 85000.00, obtido %s", dfc.NetFinancingCash)
+	}
+	if !dfc.NetCashChange.Equal(decimal.RequireFromString("130000.00")) {
+		t.Errorf("Variação Líquida de Caixa esperada 130000.00, obtida %s", dfc.NetCashChange)
+	}
+	if !dfc.FinalCashBalance.Equal(decimal.RequireFromString("180000.00")) || !dfc.IsReconciled {
+		t.Errorf("Saldo Final de Caixa esperado 180000.00 conciliado, obtido %s (reconciled=%v)", dfc.FinalCashBalance, dfc.IsReconciled)
+	}
+	if len(dfc.Lines) != 12 {
+		t.Errorf("esperadas 12 linhas estruturadas na DFC, obtidas %d", len(dfc.Lines))
+	}
+}
+

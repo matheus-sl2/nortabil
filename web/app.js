@@ -1250,6 +1250,49 @@ async function loadFinancialStatements() {
   } catch (err) {
     console.error('Erro ao carregar Indicadores Financeiros:', err);
   }
+
+  // 4. Carrega Demonstração dos Fluxos de Caixa (DFC - NBC TG 03)
+  try {
+    const resDFC = await fetch(`/api/v1/companies/${currentCompanyId}/reports/dfc?start_date=${startDate}&end_date=${endDate}`);
+    const jsonDFC = await resDFC.json();
+    if (jsonDFC.success && jsonDFC.data) {
+      renderDFC(jsonDFC.data);
+    }
+  } catch (err) {
+    console.error('Erro ao carregar DFC:', err);
+  }
+}
+
+function renderDFC(dfc) {
+  const tbody = document.getElementById('dfcTableBody');
+  const badge = document.getElementById('dfcReconciledBadge');
+  if (!tbody) return;
+
+  if (badge) {
+    if (dfc.is_reconciled) {
+      badge.className = 'text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800';
+      badge.innerText = `CAIXA FINAL: ${formatBRL(dfc.final_cash_balance)} (CONCILIADO)`;
+    } else {
+      badge.className = 'text-[11px] font-bold px-2 py-0.5 rounded bg-rose-100 text-rose-800';
+      badge.innerText = 'DIVERGENTE';
+    }
+  }
+
+  tbody.innerHTML = (dfc.lines || []).map(line => {
+    const amt = parseFloat(line.amount) || 0;
+    const isTotal = line.is_total;
+    const rowClass = isTotal ? 'font-bold bg-slate-50 text-slate-900 border-t border-b border-slate-200' : 'text-slate-600 hover:bg-slate-50';
+    const amountColor = isTotal
+      ? (amt >= 0 ? 'text-indigo-800 font-bold' : 'text-rose-700 font-bold')
+      : (amt >= 0 ? 'text-emerald-700' : 'text-rose-700');
+
+    return `
+      <tr class="${rowClass} transition">
+        <td class="py-2 px-3">${line.description}</td>
+        <td class="py-2 px-3 text-right ${amountColor}">${formatBRL(amt)}</td>
+      </tr>
+    `;
+  }).join('');
 }
 
 function renderFinancialIndicators(ind) {

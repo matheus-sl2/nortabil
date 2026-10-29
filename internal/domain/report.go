@@ -217,4 +217,51 @@ func CalculateFinancialIndicators(bs *BalanceSheetReport, dre *DREReport) *Finan
 	return rep
 }
 
+// CashFlowReport representa a Demonstração dos Fluxos de Caixa (DFC - Método Direto conforme NBC TG 03 / CPC 03)
+type CashFlowReport struct {
+	CompanyID          uuid.UUID       `json:"company_id"`
+	StartDate          time.Time       `json:"start_date"`
+	EndDate            time.Time       `json:"end_date"`
+	GeneratedAt        time.Time       `json:"generated_at"`
+	InitialCashBalance decimal.Decimal `json:"initial_cash_balance"` // Saldo Inicial de Disponibilidades (1.1.01)
+	OperatingInflows   decimal.Decimal `json:"operating_inflows"`    // (+) Recebimentos Operacionais (Clientes / Receitas)
+	OperatingOutflows  decimal.Decimal `json:"operating_outflows"`   // (-) Pagamentos Operacionais (Fornecedores / Despesas / Tributos)
+	NetOperatingCash   decimal.Decimal `json:"net_operating_cash"`   // (=) Caixa Líquido das Atividades Operacionais
+	InvestingInflows   decimal.Decimal `json:"investing_inflows"`    // (+) Recebimentos de Investimento (Baixa de Imobilizado)
+	InvestingOutflows  decimal.Decimal `json:"investing_outflows"`   // (-) Pagamentos de Investimento (Aquisição de Imobilizado / ANC)
+	NetInvestingCash   decimal.Decimal `json:"net_investing_cash"`   // (=) Caixa Líquido das Atividades de Investimento
+	FinancingInflows   decimal.Decimal `json:"financing_inflows"`    // (+) Ingressos de Financiamento (Integralização de Capital / Empréstimos)
+	FinancingOutflows  decimal.Decimal `json:"financing_outflows"`   // (-) Pagamentos de Financiamento (Amortização de Empréstimos / Dividendos)
+	NetFinancingCash   decimal.Decimal `json:"net_financing_cash"`   // (=) Caixa Líquido das Atividades de Financiamento
+	NetCashChange      decimal.Decimal `json:"net_cash_change"`      // (=) Geração / Consumo Líquido de Caixa no Período
+	FinalCashBalance   decimal.Decimal `json:"final_cash_balance"`   // (=) Saldo Final de Caixa e Equivalentes (1.1.01)
+	IsReconciled       bool            `json:"is_reconciled"`        // Garantia: Saldo Inicial + Variação == Saldo Final
+	Lines              []DRELine       `json:"lines"`
+}
+
+// FinalizeCashFlowReport consolida os subtotais, valida a conciliação de caixa e monta as linhas estruturadas da DFC
+func (dfc *CashFlowReport) FinalizeCashFlowReport() {
+	dfc.NetOperatingCash = dfc.OperatingInflows.Sub(dfc.OperatingOutflows)
+	dfc.NetInvestingCash = dfc.InvestingInflows.Sub(dfc.InvestingOutflows)
+	dfc.NetFinancingCash = dfc.FinancingInflows.Sub(dfc.FinancingOutflows)
+	dfc.NetCashChange = dfc.NetOperatingCash.Add(dfc.NetInvestingCash).Add(dfc.NetFinancingCash)
+	dfc.FinalCashBalance = dfc.InitialCashBalance.Add(dfc.NetCashChange)
+	dfc.IsReconciled = dfc.InitialCashBalance.Add(dfc.NetCashChange).Equal(dfc.FinalCashBalance)
+
+	dfc.Lines = []DRELine{
+		{Order: 1, Description: "1. ATIVIDADES OPERACIONAIS - Recebimentos de Clientes e Vendas", Amount: dfc.OperatingInflows, IsTotal: false},
+		{Order: 2, Description: "(-) Pagamentos a Fornecedores, Despesas Operacionais e Tributos", Amount: dfc.OperatingOutflows.Neg(), IsTotal: false},
+		{Order: 3, Description: "(=) CAIXA LÍQUIDO GERADO PELAS ATIVIDADES OPERACIONAIS", Amount: dfc.NetOperatingCash, IsTotal: true},
+		{Order: 4, Description: "2. ATIVIDADES DE INVESTIMENTO - Alienação de Bens", Amount: dfc.InvestingInflows, IsTotal: false},
+		{Order: 5, Description: "(-) Aquisição de Imobilizado e Ativo Não Circulante", Amount: dfc.InvestingOutflows.Neg(), IsTotal: false},
+		{Order: 6, Description: "(=) CAIXA LÍQUIDO APLICADO NAS ATIVIDADES DE INVESTIMENTO", Amount: dfc.NetInvestingCash, IsTotal: true},
+		{Order: 7, Description: "3. ATIVIDADES DE FINANCIAMENTO - Integralização de Capital e Captações", Amount: dfc.FinancingInflows, IsTotal: false},
+		{Order: 8, Description: "(-) Amortização de Empréstimos e Distribuição de Resultados", Amount: dfc.FinancingOutflows.Neg(), IsTotal: false},
+		{Order: 9, Description: "(=) CAIXA LÍQUIDO DAS ATIVIDADES DE FINANCIAMENTO", Amount: dfc.NetFinancingCash, IsTotal: true},
+		{Order: 10, Description: "(=) AUMENTO / REDUÇÃO LÍQUIDA DE CAIXA E EQUIVALENTES", Amount: dfc.NetCashChange, IsTotal: true},
+		{Order: 11, Description: "(+) Saldo Inicial de Caixa e Equivalentes (1.1.01)", Amount: dfc.InitialCashBalance, IsTotal: false},
+		{Order: 12, Description: "(=) SALDO FINAL DE CAIXA E EQUIVALENTES (1.1.01)", Amount: dfc.FinalCashBalance, IsTotal: true},
+	}
+}
+
 

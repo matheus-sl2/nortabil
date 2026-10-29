@@ -138,6 +138,24 @@ func (h *ReportHandler) GetIndicators(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusOK, report)
 }
 
+// GetCashFlow gera a Demonstração dos Fluxos de Caixa (DFC - Método Direto conforme NBC TG 03)
+func (h *ReportHandler) GetCashFlow(w http.ResponseWriter, r *http.Request) {
+	companyID := middleware.GetCompanyID(r)
+	startDate, endDate, err := parseDateRange(r)
+	if err != nil {
+		JSONError(w, http.StatusBadRequest, "INVALID_DATE_FORMAT", err.Error(), nil)
+		return
+	}
+
+	report, err := h.service.GetCashFlow(r.Context(), companyID, startDate, endDate)
+	if err != nil {
+		HandleDomainError(w, err)
+		return
+	}
+
+	JSON(w, http.StatusOK, report)
+}
+
 func parseDateRange(r *http.Request) (time.Time, time.Time, error) {
 	now := time.Now()
 	startDate := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)

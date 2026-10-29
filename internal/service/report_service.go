@@ -72,3 +72,11 @@ func (s *ReportService) GetFinancialIndicators(ctx context.Context, companyID uu
 	return domain.CalculateFinancialIndicators(bs, dre), nil
 }
 
+// GetCashFlow gera a Demonstração dos Fluxos de Caixa (DFC - Método Direto conforme NBC TG 03)
+func (s *ReportService) GetCashFlow(ctx context.Context, companyID uuid.UUID, startDate, endDate time.Time) (*domain.CashFlowReport, error) {
+	if startDate.After(endDate) {
+		return nil, domain.ErrInvalidDateRange
+	}
+	return s.reportRepo.GetCashFlowReport(ctx, companyID, startDate, endDate)
+}
+

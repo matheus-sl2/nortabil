@@ -219,6 +219,34 @@ func (s *ExportService) ExportPrintableHTML(ctx context.Context, companyID uuid.
 		}
 		sb.WriteString(`</tbody></table>`)
 
+	case "dfc", "cash-flow":
+		dfc, err := s.reportRepo.GetCashFlowReport(ctx, companyID, startDate, endDate)
+		if err != nil {
+			return "", err
+		}
+		fmt.Fprintf(&sb, `
+  <div class="title-box">DEMONSTRAÇÃO DOS FLUXOS DE CAIXA (DFC - MÉTODO DIRETO - NBC TG 03) - Período: %s a %s</div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 10%%;">Ordem</th>
+        <th style="width: 65%%;">Atividades Operacionais, de Investimento e de Financiamento</th>
+        <th style="width: 25%%; text-align: right;">Fluxo de Caixa (R$)</th>
+      </tr>
+    </thead>
+    <tbody>
+`, dtIni, dtFin)
+		for _, l := range dfc.Lines {
+			rowClass := ""
+			if l.IsTotal {
+				rowClass = " class=\"bg-total\""
+			}
+			valStr := strings.ReplaceAll(l.Amount.StringFixed(2), ".", ",")
+			fmt.Fprintf(&sb, "<tr%s><td>%d</td><td>%s</td><td class=\"text-right\">R$ %s</td></tr>\n",
+				rowClass, l.Order, l.Description, valStr)
+		}
+		sb.WriteString(`</tbody></table>`)
+
 	case "balance-sheet", "balanco":
 		bs, err := s.reportRepo.GetBalanceSheetReport(ctx, companyID, endDate)
 		if err != nil {
