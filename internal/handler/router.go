@@ -188,6 +188,7 @@ func SetupRouter(
 				}
 
 				sub.Get("/export/sped-ecd", spedHandler.ExportECD)
+				sub.Get("/export/sped-ecd/validate", spedHandler.ValidateECD)
 			})
 		})
 
@@ -241,6 +242,7 @@ func SetupRouter(
 			}
 
 			tenantGroup.Get("/export/sped-ecd", spedHandler.ExportECD)
+			tenantGroup.Get("/export/sped-ecd/validate", spedHandler.ValidateECD)
 		})
 	})
 

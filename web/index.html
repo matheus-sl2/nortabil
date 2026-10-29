@@ -573,13 +573,21 @@
             </div>
           </div>
 
-          <div class="pt-4">
+          <div class="pt-4 flex flex-wrap gap-3">
             <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-6 py-2.5 rounded-lg text-sm shadow-md transition flex items-center space-x-2">
               <i class="fa-solid fa-download"></i>
               <span>Gerar e Baixar Arquivo SPED ECD (.TXT)</span>
             </button>
+            <button type="button" onclick="handleValidateSPED()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-5 py-2.5 rounded-lg text-sm shadow-md transition flex items-center space-x-2">
+              <i class="fa-solid fa-shield-check"></i>
+              <span>Auditar & Validar no PVA Interno</span>
+            </button>
           </div>
         </form>
+
+        <div id="spedValidationBox" class="hidden mt-6 p-4 rounded-xl border border-emerald-200 bg-emerald-50/70 text-xs space-y-2">
+          <!-- Laudo do Pré-Validador PVA SPED ECD -->
+        </div>
       </div>
     </div>
 

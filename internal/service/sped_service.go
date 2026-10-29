@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/matheus-sl2/nortabil/internal/domain"
@@ -263,4 +264,135 @@ func getSPEDAccountNature(code string) string {
 	default:
 		return "09" // Outras
 	}
+}
+
+// ValidateECD gera o arquivo SPED ECD em memória e executa a auditoria estrutural e matemática (Pré-Validador PVA)
+func (s *SPEDService) ValidateECD(ctx context.Context, cfg domain.SPEDExportConfig) (*domain.SPEDValidationReport, error) {
+	content, err := s.GenerateECD(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+	return ValidateECDContent(content), nil
+}
+
+// ValidateECDContent audita o conteúdo de um arquivo SPED ECD (.TXT) verificando blocos, registros I200/I250 e totalizador 9999
+func ValidateECDContent(content string) *domain.SPEDValidationReport {
+	rep := &domain.SPEDValidationReport{
+		TotalDebitI250:  decimal.Zero,
+		TotalCreditI250: decimal.Zero,
+		BlocksVerified:  []string{},
+		Errors:          []string{},
+	}
+
+	rawLines := strings.Split(strings.TrimSpace(content), "\n")
+	var lines []string
+	for _, l := range rawLines {
+		trimmed := strings.TrimSpace(l)
+		if trimmed != "" {
+			lines = append(lines, trimmed)
+		}
+	}
+
+	rep.TotalLines = len(lines)
+	if rep.TotalLines == 0 {
+		rep.Errors = append(rep.Errors, "Arquivo SPED ECD vazio")
+		return rep
+	}
+
+	has0000, has0990 := false, false
+	hasI001, hasI990 := false, false
+	hasJ001, hasJ990 := false, false
+	has9001, has9999 := false, false
+
+	for idx, line := range lines {
+		if !strings.HasPrefix(line, "|") || !strings.HasSuffix(line, "|") {
+			rep.Errors = append(rep.Errors, fmt.Sprintf("Linha %d sem delimitadores pipe '|' válidos", idx+1))
+			continue
+		}
+
+		parts := strings.Split(line, "|")
+		if len(parts) < 3 {
+			continue
+		}
+		reg := parts[1]
+
+		switch reg {
+		case "0000":
+			has0000 = true
+		case "0990":
+			has0990 = true
+		case "I001":
+			hasI001 = true
+		case "I050":
+			rep.TotalAccountsI050++
+		case "I200":
+			rep.TotalEntriesI200++
+		case "I250":
+			rep.TotalPartidasI250++
+			if len(parts) >= 6 {
+				valStr := strings.ReplaceAll(parts[4], ",", ".")
+				indDC := parts[5]
+				if amt, err := decimal.NewFromString(valStr); err == nil {
+					if indDC == "D" {
+						rep.TotalDebitI250 = rep.TotalDebitI250.Add(amt)
+					} else if indDC == "C" {
+						rep.TotalCreditI250 = rep.TotalCreditI250.Add(amt)
+					}
+				}
+			}
+		case "I990":
+			hasI990 = true
+		case "J001":
+			hasJ001 = true
+		case "J990":
+			hasJ990 = true
+		case "9001":
+			has9001 = true
+		case "9999":
+			has9999 = true
+			if len(parts) >= 3 {
+				if n, err := strconv.Atoi(parts[2]); err == nil {
+					rep.ReportedLines9999 = n
+				}
+			}
+		}
+	}
+
+	if has0000 && has0990 {
+		rep.BlocksVerified = append(rep.BlocksVerified, "Bloco 0: Identificação e Abertura (0000..0990)")
+	} else {
+		rep.Errors = append(rep.Errors, "Bloco 0 incompleto (registros 0000 ou 0990 ausentes)")
+	}
+
+	if hasI001 && hasI990 {
+		rep.BlocksVerified = append(rep.BlocksVerified, "Bloco I: Lançamentos Contábeis e Plano de Contas (I001..I990)")
+	} else {
+		rep.Errors = append(rep.Errors, "Bloco I incompleto (registros I001 ou I990 ausentes)")
+	}
+
+	if hasJ001 && hasJ990 {
+		rep.BlocksVerified = append(rep.BlocksVerified, "Bloco J: Demonstrações Contábeis e Signatários CRC (J001..J990)")
+	} else {
+		rep.Errors = append(rep.Errors, "Bloco J incompleto (registros J001 ou J990 ausentes)")
+	}
+
+	if has9001 && has9999 {
+		rep.BlocksVerified = append(rep.BlocksVerified, "Bloco 9: Controle e Encerramento do Arquivo Digital (9001..9999)")
+	} else {
+		rep.Errors = append(rep.Errors, "Bloco 9 incompleto (registros 9001 ou 9999 ausentes)")
+	}
+
+	rep.IsDoubleEntryBalanced = rep.TotalDebitI250.Equal(rep.TotalCreditI250)
+	if !rep.IsDoubleEntryBalanced {
+		rep.Errors = append(rep.Errors, fmt.Sprintf("Divergência nas partidas I250: Débitos (%s) != Créditos (%s)",
+			rep.TotalDebitI250.StringFixed(2), rep.TotalCreditI250.StringFixed(2)))
+	}
+
+	if rep.ReportedLines9999 != rep.TotalLines {
+		rep.Errors = append(rep.Errors, fmt.Sprintf("Total de linhas no registro 9999 (%d) diverge do total físico do arquivo (%d)",
+			rep.ReportedLines9999, rep.TotalLines))
+	}
+
+	rep.IsValid = len(rep.Errors) == 0
+	return rep
 }

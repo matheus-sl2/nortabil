@@ -73,3 +73,39 @@ func (h *SPEDHandler) ExportECD(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(content))
 }
 
+// ValidateECD executa o Pré-Validador PVA interno sobre a escrituração SPED ECD da empresa
+func (h *SPEDHandler) ValidateECD(w http.ResponseWriter, r *http.Request) {
+	companyID := middleware.GetCompanyID(r)
+	q := r.URL.Query()
+
+	year := time.Now().Year()
+	if yearStr := q.Get("year"); yearStr != "" {
+		if y, err := strconv.Atoi(yearStr); err == nil && y > 1900 {
+			year = y
+		}
+	}
+
+	startDate := time.Date(year, time.January, 1, 0, 0, 0, 0, time.UTC)
+	endDate := time.Date(year, time.December, 31, 23, 59, 59, 999999999, time.UTC)
+
+	cfg := domain.SPEDExportConfig{
+		CompanyID:     companyID,
+		StartDate:     startDate,
+		EndDate:       endDate,
+		BookType:      "G",
+		AuditorCRC:    q.Get("auditor_crc"),
+		AuditorName:   q.Get("auditor_name"),
+		AuditorCPF:    q.Get("auditor_cpf"),
+		SignatoryName: q.Get("signatory_name"),
+		SignatoryCPF:  q.Get("signatory_cpf"),
+	}
+
+	report, err := h.spedService.ValidateECD(r.Context(), cfg)
+	if err != nil {
+		HandleDomainError(w, err)
+		return
+	}
+
+	JSON(w, http.StatusOK, report)
+}
+

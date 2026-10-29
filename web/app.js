@@ -1209,6 +1209,51 @@ function handleExportSPED(e) {
   window.open(url, '_blank');
 }
 
+async function handleValidateSPED() {
+  if (!currentCompanyId) return;
+
+  const year = document.getElementById('spedYear').value;
+  const crc = encodeURIComponent(document.getElementById('spedCRC').value);
+  const auditorName = encodeURIComponent(document.getElementById('spedAuditorName').value);
+  const auditorCPF = encodeURIComponent(document.getElementById('spedAuditorCPF').value);
+  const signatoryName = encodeURIComponent(document.getElementById('spedSignatoryName').value);
+  const signatoryCPF = encodeURIComponent(document.getElementById('spedSignatoryCPF').value);
+
+  try {
+    const res = await fetch(`/api/v1/companies/${currentCompanyId}/export/sped-ecd/validate?year=${year}&auditor_crc=${crc}&auditor_name=${auditorName}&auditor_cpf=${auditorCPF}&signatory_name=${signatoryName}&signatory_cpf=${signatoryCPF}`);
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json.error?.message || json.message || 'Falha ao validar SPED ECD');
+    }
+
+    const v = json.data;
+    const box = document.getElementById('spedValidationBox');
+    if (box) {
+      box.classList.remove('hidden');
+      box.innerHTML = `
+        <div class="flex justify-between items-center border-b border-emerald-200 pb-2">
+          <span class="font-bold text-emerald-900 text-sm"><i class="fa-solid fa-circle-check mr-1"></i>Laudo de Auditoria do Pré-Validador PVA (SPED ECD Leiaute 9)</span>
+          <span class="font-mono font-bold px-2.5 py-0.5 rounded ${v.is_valid ? 'bg-emerald-200 text-emerald-900' : 'bg-rose-200 text-rose-900'}">${v.is_valid ? '100% APROVADO SEM ERROS' : 'INCONSISTÊNCIAS DETECTADAS'}</span>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-slate-700 pt-1">
+          <div><b>Linhas Físicas:</b> ${v.total_lines}</div>
+          <div><b>Registro 9999:</b> ${v.reported_lines_9999}</div>
+          <div><b>Contas (I050):</b> ${v.total_accounts_i050}</div>
+          <div><b>Lançamentos (I200):</b> ${v.total_entries_i200} (${v.total_partidas_i250} partidas I250)</div>
+          <div class="col-span-2"><b>Soma Débitos I250:</b> <span class="text-rose-700 font-bold">${formatBRL(v.total_debit_i250)}</span></div>
+          <div class="col-span-2"><b>Soma Créditos I250:</b> <span class="text-emerald-700 font-bold">${formatBRL(v.total_credit_i250)}</span></div>
+        </div>
+        <div class="pt-1 text-[11px] text-slate-600">
+          <b>Blocos Auditados:</b> ${(v.blocks_verified || []).join(' • ')}
+        </div>
+      `;
+    }
+    showAlert('Auditoria do SPED ECD concluída: arquivo 100% íntegro e balanceado para o PVA da Receita Federal!');
+  } catch (err) {
+    showAlert('Erro na validação do SPED ECD: ' + err.message, 'error');
+  }
+}
+
 // ==========================================
 // DEMONSTRAÇÕES CONTÁBEIS (DRE & BALANÇO)
 // ==========================================

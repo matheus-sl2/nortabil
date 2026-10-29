@@ -4,7 +4,23 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
+
+// SPEDValidationReport representa o laudo técnico do Pré-Validador PVA da Escrituração Contábil Digital (SPED ECD)
+type SPEDValidationReport struct {
+	IsValid               bool            `json:"is_valid"`
+	TotalLines            int             `json:"total_lines"`
+	ReportedLines9999     int             `json:"reported_lines_9999"`
+	TotalAccountsI050     int             `json:"total_accounts_i050"`
+	TotalEntriesI200      int             `json:"total_entries_i200"`
+	TotalPartidasI250     int             `json:"total_partidas_i250"`
+	TotalDebitI250        decimal.Decimal `json:"total_debit_i250"`
+	TotalCreditI250       decimal.Decimal `json:"total_credit_i250"`
+	IsDoubleEntryBalanced bool            `json:"is_double_entry_balanced"`
+	BlocksVerified        []string        `json:"blocks_verified"`
+	Errors                []string        `json:"errors"`
+}
 
 // SPEDExportConfig define as configurações e signatários para geração da ECD
 type SPEDExportConfig struct {
