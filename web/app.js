@@ -964,7 +964,53 @@ function fillSampleNFeXML(type) {
 
   const today = new Date().toISOString().split('T')[0];
 
-  if (type === 'ENTRADA') {
+  if (type === 'NFCE') {
+    textarea.value = `<?xml version="1.0" encoding="UTF-8"?>
+<nfeProc versao="4.00" xmlns="http://www.portalfiscal.inf.br/nfe">
+  <NFe>
+    <infNFe Id="NFe31260260701190000104650010000458901000458902" versao="4.00">
+      <ide>
+        <cUF>31</cUF>
+        <natOp>Venda de Mercadoria Adquirida de Terceiros (Varejo PDV)</natOp>
+        <mod>65</mod>
+        <serie>1</serie>
+        <nNF>45890</nNF>
+        <dhEmi>${today}T16:40:00-03:00</dhEmi>
+        <tpNF>1</tpNF>
+      </ide>
+      <emit>
+        <CNPJ>60701190000104</CNPJ>
+        <xNome>DISTRIBUIDORA COMERCIAL MONTES CLAROS LTDA</xNome>
+      </emit>
+      <dest>
+        <CPF>12345678909</CPF>
+        <xNome>CONSUMIDOR FINAL BALCAO PDV - MONTES CLAROS MG</xNome>
+      </dest>
+      <det nItem="1">
+        <prod>
+          <cProd>MER-402</cProd>
+          <xProd>Kit Cesta Basica Regional, Arroz Tipo 1, Oleo de Soja e Cafe Torrado</xProd>
+          <CFOP>5102</CFOP>
+          <vProd>1850.00</vProd>
+        </prod>
+      </det>
+      <total>
+        <ICMSTot>
+          <vProd>1850.00</vProd>
+          <vICMS>222.00</vICMS>
+          <vDesc>0.00</vDesc>
+          <vNF>1850.00</vNF>
+        </ICMSTot>
+      </total>
+    </infNFe>
+  </NFe>
+  <protNFe versao="4.00">
+    <infProt>
+      <chNFe>31260260701190000104650010000458901000458902</chNFe>
+    </infProt>
+  </protNFe>
+</nfeProc>`;
+  } else if (type === 'ENTRADA') {
     textarea.value = `<?xml version="1.0" encoding="UTF-8"?>
 <nfeProc versao="4.00" xmlns="http://www.portalfiscal.inf.br/nfe">
   <NFe>
@@ -1066,6 +1112,7 @@ async function handleImportNFeXML(e) {
   const xmlContent = document.getElementById('nfeXmlContent').value.trim();
   const debitAccountId = document.getElementById('nfeDebitAccount')?.value || '';
   const creditAccountId = document.getElementById('nfeCreditAccount')?.value || '';
+  const cmvPercentage = parseFloat(document.getElementById('nfeCmvPercentage')?.value) || 0;
 
   try {
     const res = await fetch(`/api/v1/companies/${currentCompanyId}/nfe/import-xml`, {
@@ -1074,7 +1121,8 @@ async function handleImportNFeXML(e) {
       body: JSON.stringify({
         xml_content: xmlContent,
         debit_account_id: debitAccountId,
-        credit_account_id: creditAccountId
+        credit_account_id: creditAccountId,
+        cmv_percentage: cmvPercentage
       })
     });
     const json = await res.json();
@@ -1085,30 +1133,37 @@ async function handleImportNFeXML(e) {
     const r = json.data;
     const doc = r.document;
     const je = r.journal_entry;
+    const cmvVal = parseFloat(r.cmv_amount) || 0;
+    const docTypeLabel = doc.model === '65' ? 'NFC-e Varejo PDV (Mod. 65)' : 'NF-e Atacado (Mod. 55)';
+    const dirLabel = r.direction === 'ENTRADA_COMPRA'
+      ? 'ENTRADA / COMPRA DE ESTOQUE'
+      : (r.direction === 'SAIDA_PDV_NFCE' ? 'VENDA VAREJO PDV (CAIXA)' : 'SAÍDA / FATURAMENTO');
+
     const box = document.getElementById('nfeResultBox');
     if (box) {
       box.classList.remove('hidden');
       box.innerHTML = `
         <div class="flex justify-between items-center border-b border-emerald-200 pb-2">
-          <span class="font-bold text-emerald-900 text-sm"><i class="fa-solid fa-circle-check mr-1"></i>NF-e nº ${doc.number} (Série ${doc.series}) Contabilizada com Sucesso!</span>
-          <span class="font-mono font-bold px-2.5 py-0.5 rounded bg-emerald-200 text-emerald-900">${r.direction === 'ENTRADA_COMPRA' ? 'ENTRADA / COMPRA' : 'SAÍDA / FATURAMENTO'}</span>
+          <span class="font-bold text-emerald-900 text-sm"><i class="fa-solid fa-circle-check mr-1"></i>${docTypeLabel} nº ${doc.number} (Série ${doc.series}) Contabilizada!</span>
+          <span class="font-mono font-bold px-2.5 py-0.5 rounded bg-emerald-200 text-emerald-900">${dirLabel}</span>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-2 font-mono text-slate-700 pt-1">
           <div><b>Chave SEFAZ:</b> ${doc.access_key || '-'}</div>
           <div><b>Natureza:</b> ${doc.operation_nature}</div>
           <div><b>Emitente:</b> ${doc.emitter_name} (${doc.emitter_cnpj})</div>
           <div><b>Destinatário:</b> ${doc.recipient_name} (${doc.recipient_cnpj})</div>
-          <div><b>Valor Total (vNF):</b> <span class="font-bold text-emerald-800">${formatBRL(doc.total_invoice)}</span></div>
-          <div><b>Lançamento Diário:</b> <span class="font-bold text-indigo-800">#${je.entry_number} (${je.created_by || 'Sistema'})</span></div>
+          <div><b>Valor da Nota (vNF):</b> <span class="font-bold text-emerald-800">${formatBRL(doc.total_invoice)}</span></div>
+          <div><b>Baixa Estoque / CMV:</b> <span class="font-bold text-rose-700">${cmvVal > 0 ? formatBRL(cmvVal) : 'Não aplicável (Entrada/0%)'}</span></div>
+          <div class="md:col-span-2"><b>Lançamento Diário:</b> <span class="font-bold text-indigo-800">#${je.entry_number} (${(je.lines || []).length} partidas dobradas - Total D/C: ${formatBRL(je.total_debit)})</span></div>
         </div>
       `;
     }
 
-    showAlert(`NF-e nº ${doc.number} importada! Lançamento #${je.entry_number} (${formatBRL(doc.total_invoice)}) registrado no Livro Diário.`);
+    showAlert(`${docTypeLabel} nº ${doc.number} importada! Lançamento #${je.entry_number} registrado no Livro Diário.`);
     await loadJournalEntries();
     await loadDashboard();
   } catch (err) {
-    showAlert('Erro ao importar XML de NF-e: ' + err.message, 'error');
+    showAlert('Erro ao importar XML de NF-e/NFC-e: ' + err.message, 'error');
   }
 }
 

@@ -404,42 +404,50 @@
       </div>
     </div>
 
-    <!-- ==================== ABA 4.5: IMPORTADOR FISCAL DE NF-e (XML SEFAZ MODELO 55) ==================== -->
+    <!-- ==================== ABA 4.5: IMPORTADOR FISCAL DE NF-e (XML SEFAZ MODELO 55 / NFC-e MODELO 65) ==================== -->
     <div id="tabNFe" class="tab-content hidden space-y-6">
       <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-200 pb-4 mb-5">
           <div>
             <h3 class="text-base font-bold text-slate-800 flex items-center space-x-2">
               <i class="fa-solid fa-file-code text-indigo-600"></i>
-              <span>Importador Automático de Nota Fiscal Eletrônica (XML NF-e SEFAZ Modelo 55)</span>
+              <span>Importador Fiscal para Atacado e Varejo (NF-e Modelo 55 & NFC-e PDV Modelo 65)</span>
             </h3>
-            <p class="text-xs text-slate-500">Lê o XML autorizado da SEFAZ (<code class="font-mono bg-slate-100 px-1 rounded">&lt;nfeProc&gt;</code>), classifica Entrada (Compra) ou Saída (Venda) e contabiliza automaticamente no Livro Diário</p>
+            <p class="text-xs text-slate-500">Lê o XML autorizado da SEFAZ, classifica Atacado (Mod. 55) ou Cupom Fiscal Varejo (Mod. 65), reconhece a Receita e executa a baixa automática de Estoque contra CMV (NBC TG 16)</p>
           </div>
           <div class="flex flex-wrap gap-2">
+            <button type="button" onclick="fillSampleNFeXML('NFCE')" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 px-3 py-1.5 rounded-lg font-semibold transition flex items-center space-x-1.5">
+              <i class="fa-solid fa-cash-register"></i>
+              <span>Exemplo NFC-e Varejo PDV (Mod. 65)</span>
+            </button>
             <button type="button" onclick="fillSampleNFeXML('SAIDA')" class="text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-lg font-semibold transition flex items-center space-x-1.5">
               <i class="fa-solid fa-wand-magic-sparkles"></i>
-              <span>Exemplo XML Venda (Saída)</span>
+              <span>Exemplo NF-e Atacado (Mod. 55)</span>
             </button>
             <button type="button" onclick="fillSampleNFeXML('ENTRADA')" class="text-xs bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 px-3 py-1.5 rounded-lg font-semibold transition flex items-center space-x-1.5">
               <i class="fa-solid fa-truck-ramp-box"></i>
-              <span>Exemplo XML Compra (Entrada)</span>
+              <span>Exemplo NF-e Compra Estoque (Entrada)</span>
             </button>
           </div>
         </div>
 
         <form onsubmit="handleImportNFeXML(event)" class="space-y-4">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label class="block text-xs font-semibold text-slate-600 mb-1">Conta Analítica de Débito (Opcional - Automático pelo CFOP/Tipo)</label>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Conta Analítica de Débito (Opcional)</label>
               <select id="nfeDebitAccount" class="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 <option value="">Classificação Contábil Automática (Padrão)</option>
               </select>
             </div>
             <div>
-              <label class="block text-xs font-semibold text-slate-600 mb-1">Conta Analítica de Crédito (Opcional - Automático pelo CFOP/Tipo)</label>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Conta Analítica de Crédito (Opcional)</label>
               <select id="nfeCreditAccount" class="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 <option value="">Classificação Contábil Automática (Padrão)</option>
               </select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Baixa Automática de Estoque / CMV (%)</label>
+              <input type="number" id="nfeCmvPercentage" value="60" min="0" max="100" step="0.5" class="w-full text-xs font-mono border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" title="Percentual do Custo da Mercadoria Vendida (CMV) para baixa simultânea do estoque na venda (0 = desativar)" />
             </div>
           </div>
 

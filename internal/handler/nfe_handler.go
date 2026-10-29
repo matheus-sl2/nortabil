@@ -9,9 +9,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/matheus-sl2/nortabil/internal/middleware"
 	"github.com/matheus-sl2/nortabil/internal/service"
+	"github.com/shopspring/decimal"
 )
 
-// NFeHandler processa requisições de importação e contabilização automática de XML de NF-e (SEFAZ Modelo 55)
+// NFeHandler processa requisições de importação e contabilização automática de XML de NF-e (Mod. 55) e NFC-e (Mod. 65)
 type NFeHandler struct {
 	service *service.NFeService
 }
@@ -21,15 +22,17 @@ func NewNFeHandler(service *service.NFeService) *NFeHandler {
 }
 
 type importNFeRequest struct {
-	XMLContent      string `json:"xml_content"`
-	DebitAccountID  string `json:"debit_account_id,omitempty"`
-	CreditAccountID string `json:"credit_account_id,omitempty"`
+	XMLContent      string          `json:"xml_content"`
+	DebitAccountID  string          `json:"debit_account_id,omitempty"`
+	CreditAccountID string          `json:"credit_account_id,omitempty"`
+	CMVPercentage   decimal.Decimal `json:"cmv_percentage,omitempty"`
 }
 
-// ImportXML recebe um arquivo XML de NF-e (via JSON ou multipart/form-data) e registra o lançamento em partidas dobradas
+// ImportXML recebe um arquivo XML de NF-e/NFC-e (via JSON ou multipart/form-data) e registra o lançamento em partidas dobradas
 func (h *NFeHandler) ImportXML(w http.ResponseWriter, r *http.Request) {
 	var rawXML string
 	var debitStr, creditStr string
+	cmvPct := decimal.Zero
 
 	contentType := r.Header.Get("Content-Type")
 	if strings.HasPrefix(contentType, "multipart/form-data") {
@@ -39,6 +42,11 @@ func (h *NFeHandler) ImportXML(w http.ResponseWriter, r *http.Request) {
 		}
 		debitStr = r.FormValue("debit_account_id")
 		creditStr = r.FormValue("credit_account_id")
+		if pctStr := strings.TrimSpace(r.FormValue("cmv_percentage")); pctStr != "" {
+			if p, err := decimal.NewFromString(strings.ReplaceAll(pctStr, ",", ".")); err == nil {
+				cmvPct = p
+			}
+		}
 
 		file, _, err := r.FormFile("file")
 		if err == nil {
@@ -61,6 +69,7 @@ func (h *NFeHandler) ImportXML(w http.ResponseWriter, r *http.Request) {
 		rawXML = req.XMLContent
 		debitStr = req.DebitAccountID
 		creditStr = req.CreditAccountID
+		cmvPct = req.CMVPercentage
 	}
 
 	var debitID, creditID uuid.UUID
@@ -84,10 +93,10 @@ func (h *NFeHandler) ImportXML(w http.ResponseWriter, r *http.Request) {
 	companyID := middleware.GetCompanyID(r)
 	createdBy := middleware.GetUserIdentity(r)
 	if createdBy == "" {
-		createdBy = "Importador Fiscal NF-e"
+		createdBy = "Importador Fiscal NF-e/NFC-e"
 	}
 
-	result, err := h.service.ImportNFeXML(r.Context(), companyID, rawXML, debitID, creditID, createdBy)
+	result, err := h.service.ImportNFeXML(r.Context(), companyID, rawXML, debitID, creditID, cmvPct, createdBy)
 	if err != nil {
 		HandleDomainError(w, err)
 		return
@@ -95,4 +104,3 @@ func (h *NFeHandler) ImportXML(w http.ResponseWriter, r *http.Request) {
 
 	JSON(w, http.StatusCreated, result)
 }
-

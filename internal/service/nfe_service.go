@@ -7,9 +7,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/matheus-sl2/nortabil/internal/domain"
 	"github.com/matheus-sl2/nortabil/internal/repository/postgres"
+	"github.com/shopspring/decimal"
 )
 
-// NFeService gerencia a importação e contabilização automática de Notas Fiscais Eletrônicas (XML SEFAZ Modelo 55)
+// NFeService gerencia a importação e contabilização automática de NF-e (Modelo 55 - Atacado) e NFC-e (Modelo 65 - Varejo PDV)
 type NFeService struct {
 	companyRepo    *postgres.CompanyRepository
 	accountRepo    *postgres.AccountRepository
@@ -28,13 +29,14 @@ func NewNFeService(
 	}
 }
 
-// ImportNFeXML processa o XML da NF-e, classifica a operação (Entrada ou Saída) e registra o lançamento em partidas dobradas
+// ImportNFeXML processa o XML da NF-e/NFC-e, classifica a operação, aplica baixa automática de CMV/Estoque (se venda comercial) e registra no Diário
 func (s *NFeService) ImportNFeXML(
 	ctx context.Context,
 	companyID uuid.UUID,
 	rawXML string,
 	debitAccountID uuid.UUID,
 	creditAccountID uuid.UUID,
+	cmvPercentage decimal.Decimal,
 	createdBy string,
 ) (*domain.NFeImportResult, error) {
 	doc, err := domain.ParseNFeXML(rawXML)
@@ -51,20 +53,22 @@ func (s *NFeService) ImportNFeXML(
 	emitDigits := onlyDigits(doc.EmitterCNPJ)
 	destDigits := onlyDigits(doc.RecipientCNPJ)
 
-	// Identifica se a NF-e é de Entrada (Compra) ou Saída (Venda)
+	// Identifica se o documento fiscal é de Entrada (Compra), Saída Atacado (NF-e 55) ou Saída Varejo PDV (NFC-e 65)
 	direction := "SAIDA_VENDA"
 	if (destDigits != "" && destDigits == compDigits && emitDigits != compDigits) || doc.OperationType == "0" {
 		direction = "ENTRADA_COMPRA"
+	} else if doc.Model == "65" {
+		direction = "SAIDA_PDV_NFCE"
+	}
+
+	accounts, err := s.accountRepo.List(ctx, companyID, true)
+	if err != nil {
+		return nil, err
 	}
 
 	// Se o usuário não especificou manualmente as contas analíticas de Débito/Crédito, seleciona automaticamente pelo Plano de Contas
 	if debitAccountID == uuid.Nil || creditAccountID == uuid.Nil {
-		accounts, err := s.accountRepo.List(ctx, companyID, true)
-		if err != nil {
-			return nil, err
-		}
-
-		autoDebit, autoCredit := resolveDefaultNFeAccounts(accounts, direction)
+		autoDebit, autoCredit := resolveDefaultNFeAccounts(accounts, direction, doc.Model)
 		if debitAccountID == uuid.Nil {
 			debitAccountID = autoDebit
 		}
@@ -80,6 +84,18 @@ func (s *NFeService) ImportNFeXML(
 	entry, err := doc.BuildAccountingEntry(companyID, direction, debitAccountID, creditAccountID, createdBy)
 	if err != nil {
 		return nil, err
+	}
+
+	// Em vendas comerciais (NF-e Mod. 55 ou NFC-e Mod. 65), reconhece simultaneamente o CMV e a baixa do Estoque (NBC TG 16)
+	cmvAmount := decimal.Zero
+	if direction != "ENTRADA_COMPRA" && cmvPercentage.IsPositive() {
+		cmvAccID, invAccID := resolveCMVAndInventoryAccounts(accounts)
+		if cmvAccID != uuid.Nil && invAccID != uuid.Nil {
+			cmvAmount = doc.TotalProducts.Mul(cmvPercentage).DivRound(decimal.NewFromInt(100), 2)
+			if err := doc.AttachInventoryWriteOff(entry, cmvAmount, cmvAccID, invAccID); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	createdLines := make([]CreateJournalLineInput, len(entry.Lines))
@@ -106,6 +122,7 @@ func (s *NFeService) ImportNFeXML(
 	return &domain.NFeImportResult{
 		Document:     doc,
 		Direction:    direction,
+		CMVAmount:    cmvAmount,
 		JournalEntry: postedEntry,
 	}, nil
 }
@@ -120,7 +137,7 @@ func onlyDigits(val string) string {
 	return b.String()
 }
 
-func resolveDefaultNFeAccounts(accounts []domain.Account, direction string) (uuid.UUID, uuid.UUID) {
+func resolveDefaultNFeAccounts(accounts []domain.Account, direction, model string) (uuid.UUID, uuid.UUID) {
 	byCode := make(map[string]uuid.UUID)
 	var firstAsset, firstLiability, firstRevenue, firstExpense uuid.UUID
 
@@ -168,7 +185,23 @@ func resolveDefaultNFeAccounts(accounts []domain.Account, direction string) (uui
 		return deb, cred
 	}
 
-	// Saída / Venda de Mercadorias: D - Clientes/Duplicatas a Receber (1.1.02.001) | C - Receita de Vendas (4.1.01.001)
+	// Para NFC-e (Modelo 65 - PDV de Varejo): recebimento imediato em Caixa/Disponibilidades (1.1.01.001 ou 1.1.01.002)
+	if model == "65" || direction == "SAIDA_PDV_NFCE" {
+		deb := byCode["1.1.01.001"]
+		if deb == uuid.Nil {
+			deb = byCode["1.1.01.002"]
+		}
+		if deb == uuid.Nil {
+			deb = firstAsset
+		}
+		cred := byCode["4.1.01.001"]
+		if cred == uuid.Nil {
+			cred = firstRevenue
+		}
+		return deb, cred
+	}
+
+	// Saída / Venda Atacado (NF-e Modelo 55): D - Clientes/Duplicatas a Receber (1.1.02.001) | C - Receita de Vendas (4.1.01.001)
 	deb := byCode["1.1.02.001"]
 	if deb == uuid.Nil {
 		deb = byCode["1.1.01.002"]
@@ -181,4 +214,37 @@ func resolveDefaultNFeAccounts(accounts []domain.Account, direction string) (uui
 		cred = firstRevenue
 	}
 	return deb, cred
+}
+
+func resolveCMVAndInventoryAccounts(accounts []domain.Account) (uuid.UUID, uuid.UUID) {
+	byCode := make(map[string]uuid.UUID)
+	var firstExpense, firstAsset uuid.UUID
+
+	for _, a := range accounts {
+		if a.IsSynthetic || !a.Active {
+			continue
+		}
+		byCode[a.Code] = a.ID
+		switch a.Type {
+		case domain.AccountTypeExpense:
+			if firstExpense == uuid.Nil {
+				firstExpense = a.ID
+			}
+		case domain.AccountTypeAsset:
+			if firstAsset == uuid.Nil {
+				firstAsset = a.ID
+			}
+		}
+	}
+
+	// Conta de CMV (5.1.01.001) e Conta de Estoque de Mercadorias (1.1.03.001)
+	cmvAcc := byCode["5.1.01.001"]
+	if cmvAcc == uuid.Nil {
+		cmvAcc = firstExpense
+	}
+	invAcc := byCode["1.1.03.001"]
+	if invAcc == uuid.Nil {
+		invAcc = firstAsset
+	}
+	return cmvAcc, invAcc
 }

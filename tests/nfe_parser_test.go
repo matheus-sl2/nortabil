@@ -61,8 +61,8 @@ func TestParseNFeXMLAndAccountingEntry(t *testing.T) {
 		t.Fatalf("falha ao processar XML NF-e válido: %v", err)
 	}
 
-	if doc.AccessKey != "31260219131243000197550010001254801001254809" {
-		t.Errorf("chave de acesso inesperada: %s", doc.AccessKey)
+	if doc.AccessKey != "31260219131243000197550010001254801001254809" || doc.Model != "55" {
+		t.Errorf("chave/modelo inesperados: %s / %s", doc.AccessKey, doc.Model)
 	}
 	if doc.Number != "125480" || doc.Series != "1" {
 		t.Errorf("número/série inesperados: %s / %s", doc.Number, doc.Series)
@@ -89,17 +89,26 @@ func TestParseNFeXMLAndAccountingEntry(t *testing.T) {
 	companyID := uuid.New()
 	debitAcc := uuid.New()
 	creditAcc := uuid.New()
+	cmvAcc := uuid.New()
+	invAcc := uuid.New()
 
 	entry, err := doc.BuildAccountingEntry(companyID, "SAIDA_VENDA", debitAcc, creditAcc, "contador@nortabil.com.br")
 	if err != nil {
 		t.Fatalf("falha ao gerar lançamento contábil da NF-e: %v", err)
 	}
 
-	if err := entry.ValidateDoubleEntry(); err != nil {
-		t.Fatalf("lançamento gerado pela NF-e deve respeitar as partidas dobradas: %v", err)
+	// Anexa a baixa automática de Estoque contra CMV (60% de R$ 22.500,00 = R$ 13.500,00)
+	cmvAmount := decimal.RequireFromString("13500.00")
+	if err := doc.AttachInventoryWriteOff(entry, cmvAmount, cmvAcc, invAcc); err != nil {
+		t.Fatalf("falha ao anexar baixa de estoque/CMV: %v", err)
 	}
-	if !entry.TotalDebit.Equal(decimal.NewFromFloat(22500.00)) || !entry.TotalCredit.Equal(decimal.NewFromFloat(22500.00)) {
-		t.Errorf("totais do lançamento contábil incorretos: D=%s, C=%s", entry.TotalDebit, entry.TotalCredit)
+
+	if err := entry.ValidateDoubleEntry(); err != nil {
+		t.Fatalf("lançamento comercial composto (Receita + CMV/Estoque) deve respeitar as partidas dobradas: %v", err)
+	}
+	// Total D/C composto: 22.500,00 (Venda) + 13.500,00 (CMV/Estoque) = 36.000,00 em 4 partidas
+	if len(entry.Lines) != 4 || !entry.TotalDebit.Equal(decimal.RequireFromString("36000.00")) || !entry.TotalCredit.Equal(decimal.RequireFromString("36000.00")) {
+		t.Errorf("totais do lançamento composto incorretos: linhas=%d, D=%s, C=%s", len(entry.Lines), entry.TotalDebit, entry.TotalCredit)
 	}
 }
 

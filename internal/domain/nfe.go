@@ -12,13 +12,14 @@ import (
 )
 
 var (
-	// ErrInvalidNFeXML ocorre quando o conteúdo XML não corresponde ao leiaute padrão SEFAZ NF-e Modelo 55.
-	ErrInvalidNFeXML = errors.New("arquivo XML de NF-e inválido ou fora do padrão SEFAZ (Modelo 55)")
+	// ErrInvalidNFeXML ocorre quando o conteúdo XML não corresponde ao leiaute padrão SEFAZ NF-e (Mod. 55) ou NFC-e (Mod. 65).
+	ErrInvalidNFeXML = errors.New("arquivo XML fiscal inválido ou fora do padrão SEFAZ (NF-e Modelo 55 / NFC-e Modelo 65)")
 )
 
-// NFeDocument representa os dados fiscais e contábeis extraídos de uma Nota Fiscal Eletrônica (SEFAZ Modelo 55)
+// NFeDocument representa os dados fiscais e contábeis extraídos de uma NF-e (Modelo 55 - Atacado) ou NFC-e (Modelo 65 - Varejo PDV)
 type NFeDocument struct {
 	AccessKey       string          `json:"access_key"`
+	Model           string          `json:"model"` // "55" (NF-e) ou "65" (NFC-e Varejo)
 	Number          string          `json:"number"`
 	Series          string          `json:"series"`
 	IssueDate       time.Time       `json:"issue_date"`
@@ -35,11 +36,12 @@ type NFeDocument struct {
 	ItemsSummary    string          `json:"items_summary"`
 }
 
-// NFeImportResult representa o resultado da contabilização automática de uma NF-e no Livro Diário
+// NFeImportResult representa o resultado da contabilização automática de uma NF-e / NFC-e no Livro Diário
 type NFeImportResult struct {
-	Document     *NFeDocument  `json:"document"`
-	Direction    string        `json:"direction"` // SAIDA_VENDA ou ENTRADA_COMPRA
-	JournalEntry *JournalEntry `json:"journal_entry"`
+	Document     *NFeDocument    `json:"document"`
+	Direction    string          `json:"direction"` // SAIDA_VENDA, SAIDA_PDV_NFCE ou ENTRADA_COMPRA
+	CMVAmount    decimal.Decimal `json:"cmv_amount"`
+	JournalEntry *JournalEntry   `json:"journal_entry"`
 }
 
 // Estruturas internas para decodificação do XML oficial da SEFAZ (<nfeProc> ou <NFe>)
@@ -63,6 +65,7 @@ type xmlNFe struct {
 type xmlInfNFe struct {
 	ID  string `xml:"Id,attr"`
 	Ide struct {
+		Mod   string `xml:"mod"`
 		Serie string `xml:"serie"`
 		NNF   string `xml:"nNF"`
 		DhEmi string `xml:"dhEmi"`
@@ -98,7 +101,7 @@ type xmlInfNFe struct {
 	} `xml:"total"`
 }
 
-// ParseNFeXML analisa um documento XML de NF-e (com ou sem envelopamento nfeProc) e retorna a estrutura fiscal validada
+// ParseNFeXML analisa um documento XML de NF-e (Modelo 55) ou NFC-e (Modelo 65) e retorna a estrutura fiscal validada
 func ParseNFeXML(rawXML string) (*NFeDocument, error) {
 	cleaned := strings.TrimSpace(rawXML)
 	if cleaned == "" {
@@ -145,6 +148,11 @@ func ParseNFeXML(rawXML string) (*NFeDocument, error) {
 
 	issueDate := parseNFeDate(inf.Ide.DhEmi, inf.Ide.DEmi)
 
+	model := strings.TrimSpace(inf.Ide.Mod)
+	if model == "" {
+		model = "55"
+	}
+
 	emitDoc := strings.TrimSpace(inf.Emit.CNPJ)
 	if emitDoc == "" {
 		emitDoc = strings.TrimSpace(inf.Emit.CPF)
@@ -152,6 +160,13 @@ func ParseNFeXML(rawXML string) (*NFeDocument, error) {
 	destDoc := strings.TrimSpace(inf.Dest.CNPJ)
 	if destDoc == "" {
 		destDoc = strings.TrimSpace(inf.Dest.CPF)
+	}
+	destName := strings.TrimSpace(inf.Dest.XNome)
+	if destName == "" && model == "65" {
+		destName = "CONSUMIDOR FINAL (PDV VAREJO)"
+	}
+	if destDoc == "" && model == "65" {
+		destDoc = "CONSUMIDOR-PDV"
 	}
 
 	var items []string
@@ -163,7 +178,7 @@ func ParseNFeXML(rawXML string) (*NFeDocument, error) {
 	}
 	itemsSummary := strings.Join(items, "; ")
 	if itemsSummary == "" {
-		itemsSummary = "Mercadorias / Serviços conforme NF-e"
+		itemsSummary = "Mercadorias / Serviços conforme Documento Fiscal"
 	}
 
 	tpNF := strings.TrimSpace(inf.Ide.TpNF)
@@ -178,6 +193,7 @@ func ParseNFeXML(rawXML string) (*NFeDocument, error) {
 
 	return &NFeDocument{
 		AccessKey:       accessKey,
+		Model:           model,
 		Number:          strings.TrimSpace(inf.Ide.NNF),
 		Series:          serie,
 		IssueDate:       issueDate,
@@ -186,7 +202,7 @@ func ParseNFeXML(rawXML string) (*NFeDocument, error) {
 		EmitterCNPJ:     emitDoc,
 		EmitterName:     strings.TrimSpace(inf.Emit.XNome),
 		RecipientCNPJ:   destDoc,
-		RecipientName:   strings.TrimSpace(inf.Dest.XNome),
+		RecipientName:   destName,
 		TotalProducts:   vProd,
 		TotalInvoice:    vNF,
 		TotalICMS:       vICMS,
@@ -224,15 +240,20 @@ func parseNFeDate(dhEmi, dEmi string) time.Time {
 	return time.Now().UTC()
 }
 
-// BuildAccountingEntry monta o lançamento de partidas dobradas correspondente à NF-e
+// BuildAccountingEntry monta o lançamento de partidas dobradas correspondente à NF-e (Mod. 55) ou NFC-e (Mod. 65)
 func (doc *NFeDocument) BuildAccountingEntry(companyID uuid.UUID, direction string, debitAccountID, creditAccountID uuid.UUID, createdBy string) (*JournalEntry, error) {
+	docLabel := "NF-e"
+	if doc.Model == "65" {
+		docLabel = "NFC-e (PDV Varejo)"
+	}
+
 	var desc string
 	if direction == "ENTRADA_COMPRA" {
-		desc = fmt.Sprintf("NF-e Entrada nº %s (Série %s) - %s - Emitente: %s (%s) - Itens: %s",
-			doc.Number, doc.Series, doc.OperationNature, doc.EmitterName, doc.EmitterCNPJ, doc.ItemsSummary)
+		desc = fmt.Sprintf("%s Entrada nº %s (Série %s) - %s - Emitente: %s (%s) - Itens: %s",
+			docLabel, doc.Number, doc.Series, doc.OperationNature, doc.EmitterName, doc.EmitterCNPJ, doc.ItemsSummary)
 	} else {
-		desc = fmt.Sprintf("NF-e Saída nº %s (Série %s) - %s - Destinatário: %s (%s) - Itens: %s",
-			doc.Number, doc.Series, doc.OperationNature, doc.RecipientName, doc.RecipientCNPJ, doc.ItemsSummary)
+		desc = fmt.Sprintf("%s Saída nº %s (Série %s) - %s - Destinatário: %s (%s) - Itens: %s",
+			docLabel, doc.Number, doc.Series, doc.OperationNature, doc.RecipientName, doc.RecipientCNPJ, doc.ItemsSummary)
 	}
 
 	if doc.AccessKey != "" {
@@ -240,7 +261,7 @@ func (doc *NFeDocument) BuildAccountingEntry(companyID uuid.UUID, direction stri
 	}
 
 	if createdBy == "" {
-		createdBy = "Importador Fiscal NF-e"
+		createdBy = "Importador Fiscal NF-e/NFC-e"
 	}
 
 	entry := &JournalEntry{
@@ -256,14 +277,14 @@ func (doc *NFeDocument) BuildAccountingEntry(companyID uuid.UUID, direction stri
 				AccountID:   debitAccountID,
 				Type:        JournalLineDebit,
 				Amount:      doc.TotalInvoice,
-				Description: fmt.Sprintf("Débito ref. NF-e nº %s (%s)", doc.Number, doc.OperationNature),
+				Description: fmt.Sprintf("Débito ref. %s nº %s (%s)", docLabel, doc.Number, doc.OperationNature),
 			},
 			{
 				ID:          uuid.New(),
 				AccountID:   creditAccountID,
 				Type:        JournalLineCredit,
 				Amount:      doc.TotalInvoice,
-				Description: fmt.Sprintf("Crédito ref. NF-e nº %s (%s)", doc.Number, doc.OperationNature),
+				Description: fmt.Sprintf("Crédito ref. %s nº %s (%s)", docLabel, doc.Number, doc.OperationNature),
 			},
 		},
 	}
@@ -273,4 +294,36 @@ func (doc *NFeDocument) BuildAccountingEntry(companyID uuid.UUID, direction stri
 		return nil, err
 	}
 	return entry, nil
+}
+
+// AttachInventoryWriteOff adiciona as partidas de baixa automática de Estoque contra CMV (NBC TG 16) nas vendas do comércio
+func (doc *NFeDocument) AttachInventoryWriteOff(entry *JournalEntry, cmvAmount decimal.Decimal, cmvAccountID, inventoryAccountID uuid.UUID) error {
+	if !cmvAmount.IsPositive() || cmvAccountID == uuid.Nil || inventoryAccountID == uuid.Nil {
+		return nil
+	}
+
+	docLabel := "NF-e"
+	if doc.Model == "65" {
+		docLabel = "NFC-e"
+	}
+
+	entry.Lines = append(entry.Lines,
+		JournalLine{
+			ID:          uuid.New(),
+			AccountID:   cmvAccountID,
+			Type:        JournalLineDebit,
+			Amount:      cmvAmount,
+			Description: fmt.Sprintf("Reconhecimento de CMV (NBC TG 16) ref. %s nº %s", docLabel, doc.Number),
+		},
+		JournalLine{
+			ID:          uuid.New(),
+			AccountID:   inventoryAccountID,
+			Type:        JournalLineCredit,
+			Amount:      cmvAmount,
+			Description: fmt.Sprintf("Baixa automática de Estoque de Mercadorias ref. %s nº %s", docLabel, doc.Number),
+		},
+	)
+
+	entry.Clean()
+	return entry.ValidateDoubleEntry()
 }
