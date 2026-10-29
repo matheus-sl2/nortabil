@@ -131,3 +131,4 @@ Para atender aos escritórios de contabilidade durante os fechamentos mensais:
 * **Worker Pool com Goroutines:** O endpoint `/api/v1/journal-entries/batch` recebe milhares de transações e distribui a validação e processamento entre múltiplos workers controlados por semáforos, evitando exaustão de conexões.
 * **Driver pgx v5 com pgxpool:** Utiliza protocolo binário nativo do PostgreSQL e pool de conexões reutilizáveis, reduzindo o overhead de conexões TCP.
 * **Evitação de Travamentos (Deadlocks):** Contas são referenciadas exclusivamente para leitura de integridade analítica e as partidas são inseridas de forma independente, garantindo que múltiplos lotes possam ser processados concorrentemente.
+

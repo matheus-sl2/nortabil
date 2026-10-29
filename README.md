@@ -211,3 +211,4 @@ curl -X GET "http://localhost:8080/api/v1/reports/trial-balance"
 * **Repositório do Projeto:** [github.com/matheus-sl2/nortabil](https://github.com/matheus-sl2/nortabil.git)
 * **Repositório de Legislação de Consulta:** [github.com/ctresb/leis](https://github.com/ctresb/leis.git)
 * **Idioma oficial de commits e comentários:** Português do Brasil (pt-BR).
+

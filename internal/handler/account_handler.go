@@ -116,3 +116,4 @@ func (h *AccountHandler) GetByCode(w http.ResponseWriter, r *http.Request) {
 
 	JSON(w, http.StatusOK, acc)
 }
+

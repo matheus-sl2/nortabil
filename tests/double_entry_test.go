@@ -214,3 +214,4 @@ func TestPrecisionDecimalMath(t *testing.T) {
 		t.Fatalf("Acúmulo de centavos divergiu: obteve %v, esperava %v", accum, expectedHundred)
 	}
 }
+

@@ -424,3 +424,4 @@ func (r *ReportRepository) GetTrialBalanceReport(ctx context.Context, startDate,
 
 	return report, nil
 }
+

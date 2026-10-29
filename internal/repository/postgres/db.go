@@ -82,3 +82,4 @@ func (db *DB) RunMigrations(ctx context.Context, autoSeed bool) error {
 	log.Println("[MIGRAÇÃO] Esquema e tabelas verificados com sucesso.")
 	return nil
 }
+

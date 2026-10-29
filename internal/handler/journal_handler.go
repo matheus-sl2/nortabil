@@ -144,3 +144,4 @@ func (h *JournalHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	JSON(w, http.StatusOK, response)
 }
+

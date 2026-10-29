@@ -72,3 +72,4 @@ func HandleDomainError(w http.ResponseWriter, err error) {
 		JSONError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Ocorreu um erro interno no servidor contábil: "+err.Error(), nil)
 	}
 }
+

@@ -83,3 +83,4 @@ type TrialBalanceReport struct {
 	TotalCreditorBalance decimal.Decimal  `json:"total_creditor_balance"`
 	IsBalanced         bool               `json:"is_balanced"`
 }
+

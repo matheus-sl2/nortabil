@@ -235,3 +235,4 @@ func (r *JournalRepository) List(ctx context.Context, f ListFilter) ([]domain.Jo
 
 	return entries, total, nil
 }
+

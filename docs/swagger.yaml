@@ -449,3 +449,4 @@ components:
           type: integer
         duration_ms:
           type: integer
+

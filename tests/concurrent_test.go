@@ -105,3 +105,4 @@ func TestTrialBalanceIntegrity(t *testing.T) {
 		t.Fatalf("O balancete de verificação deveria estar perfeitamente balanceado!")
 	}
 }
+

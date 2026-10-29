@@ -73,3 +73,4 @@ func getEnvAsBool(key string, defaultVal bool) bool {
 	}
 	return defaultVal
 }
+

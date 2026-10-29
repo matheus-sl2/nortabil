@@ -42,3 +42,4 @@ func (s *ReportService) GetTrialBalance(ctx context.Context, startDate, endDate 
 	}
 	return s.reportRepo.GetTrialBalanceReport(ctx, startDate, endDate)
 }
+

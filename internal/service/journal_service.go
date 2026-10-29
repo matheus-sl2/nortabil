@@ -182,3 +182,4 @@ func (s *JournalService) GetByID(ctx context.Context, id uuid.UUID) (*domain.Jou
 func (s *JournalService) ListEntries(ctx context.Context, f postgres.ListFilter) ([]domain.JournalEntry, int, error) {
 	return s.journalRepo.List(ctx, f)
 }
+

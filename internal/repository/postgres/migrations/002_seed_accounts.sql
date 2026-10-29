@@ -217,3 +217,4 @@ ON CONFLICT (code) DO NOTHING;
     INSERT INTO account (id, code, name, type, nature, is_synthetic, parent_id, active)
     VALUES ('00000000-0000-0000-0005-000000002005', '5.2.01.005', 'Despesas Financeiras e Tarifas Bancárias', 'EXPENSE', 'DEBIT', FALSE, '00000000-0000-0000-0005-000000000020', TRUE)
     ON CONFLICT (code) DO NOTHING;
+

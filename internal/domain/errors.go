@@ -50,3 +50,4 @@ var (
 	// ErrInvalidDateRange ocorre quando o intervalo de datas de um relatório contábil é inconsistente.
 	ErrInvalidDateRange = errors.New("intervalo de datas inválido: a data inicial não pode ser superior à data final")
 )
+

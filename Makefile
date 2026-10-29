@@ -40,3 +40,4 @@ docker-logs:
 
 clean:
 	rm -rf bin/ coverage.out coverage.html
+

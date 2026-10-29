@@ -127,3 +127,4 @@ func parseDateRange(r *http.Request) (time.Time, time.Time, error) {
 
 	return startDate, endDate, nil
 }
+

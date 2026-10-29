@@ -181,3 +181,4 @@ func (r *AccountRepository) SetSynthetic(ctx context.Context, id uuid.UUID, isSy
 	_, err := r.db.Pool.Exec(ctx, query, isSynthetic, id)
 	return err
 }
+

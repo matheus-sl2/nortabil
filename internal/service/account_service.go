@@ -143,3 +143,4 @@ func (s *AccountService) GetAccountTree(ctx context.Context) ([]*domain.AccountT
 
 	return rootNodes, nil
 }
+

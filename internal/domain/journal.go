@@ -104,3 +104,4 @@ func (e *JournalEntry) Clean() {
 		e.Lines[i].Description = strings.TrimSpace(e.Lines[i].Description)
 	}
 }
+

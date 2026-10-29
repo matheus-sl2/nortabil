@@ -156,3 +156,4 @@ func main() {
 
 	fmt.Println("\n>> Demonstração concluída com sucesso! Acesse http://localhost:8080/swagger para inspecionar os relatórios (Razão, Diário e Balancete).")
 }
+

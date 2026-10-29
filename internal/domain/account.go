@@ -73,3 +73,4 @@ func DeriveNature(t AccountType) AccountNature {
 func NormalizeAccountCode(code string) string {
 	return strings.TrimSpace(code)
 }
+
