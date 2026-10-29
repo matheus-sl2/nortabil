@@ -694,6 +694,49 @@
           </div>
         </div>
       </div>
+
+      <!-- Painel de Indicadores Econômico-Financeiros (Análise de Balanços) -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-5 py-3 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+          <h4 class="font-bold text-slate-800 text-sm flex items-center space-x-2">
+            <i class="fa-solid fa-gauge-high text-indigo-600"></i>
+            <span>Painel de Indicadores Econômico-Financeiros (Análise de Balanços & Rentabilidade)</span>
+          </h4>
+          <span class="text-[11px] font-semibold text-slate-500">Cálculo exato em ponto fixo decimal</span>
+        </div>
+        <div class="p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-center">
+          <div class="p-3 rounded-lg border border-slate-200 bg-slate-50/70">
+            <div class="text-[11px] font-semibold text-slate-500 uppercase">Liquidez Corrente</div>
+            <div id="indCurrentLiquidity" class="text-lg font-bold font-mono text-indigo-700 mt-1">0,00x</div>
+            <div class="text-[10px] text-slate-400">AC / PC</div>
+          </div>
+          <div class="p-3 rounded-lg border border-slate-200 bg-slate-50/70">
+            <div class="text-[11px] font-semibold text-slate-500 uppercase">Liquidez Imediata</div>
+            <div id="indImmediateLiquidity" class="text-lg font-bold font-mono text-indigo-700 mt-1">0,00x</div>
+            <div class="text-[10px] text-slate-400">Disponível / PC</div>
+          </div>
+          <div class="p-3 rounded-lg border border-slate-200 bg-slate-50/70">
+            <div class="text-[11px] font-semibold text-slate-500 uppercase">Endividamento Geral</div>
+            <div id="indIndebtedness" class="text-lg font-bold font-mono text-amber-700 mt-1">0,00%</div>
+            <div class="text-[10px] text-slate-400">Passivo / Ativo</div>
+          </div>
+          <div class="p-3 rounded-lg border border-slate-200 bg-slate-50/70">
+            <div class="text-[11px] font-semibold text-slate-500 uppercase">Margem Bruta</div>
+            <div id="indGrossMargin" class="text-lg font-bold font-mono text-emerald-700 mt-1">0,00%</div>
+            <div class="text-[10px] text-slate-400">Lucro Bruto / Rec. Líq.</div>
+          </div>
+          <div class="p-3 rounded-lg border border-slate-200 bg-slate-50/70">
+            <div class="text-[11px] font-semibold text-slate-500 uppercase">Margem Líquida</div>
+            <div id="indNetMargin" class="text-lg font-bold font-mono text-emerald-700 mt-1">0,00%</div>
+            <div class="text-[10px] text-slate-400">Lucro Líq. / Rec. Líq.</div>
+          </div>
+          <div class="p-3 rounded-lg border border-slate-200 bg-slate-50/70">
+            <div class="text-[11px] font-semibold text-slate-500 uppercase">ROE / ROA</div>
+            <div id="indRoeRoa" class="text-sm font-bold font-mono text-indigo-800 mt-1.5">0,0% / 0,0%</div>
+            <div class="text-[10px] text-slate-400">Retorno PL / Ativo</div>
+          </div>
+        </div>
+      </div>
     </div>
 
   </main>

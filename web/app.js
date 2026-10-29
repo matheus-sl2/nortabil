@@ -1239,6 +1239,34 @@ async function loadFinancialStatements() {
   } catch (err) {
     console.error('Erro ao carregar Balanço Patrimonial:', err);
   }
+
+  // 3. Carrega Indicadores Econômico-Financeiros
+  try {
+    const resInd = await fetch(`/api/v1/companies/${currentCompanyId}/reports/indicators?start_date=${startDate}&end_date=${endDate}`);
+    const jsonInd = await resInd.json();
+    if (jsonInd.success && jsonInd.data) {
+      renderFinancialIndicators(jsonInd.data);
+    }
+  } catch (err) {
+    console.error('Erro ao carregar Indicadores Financeiros:', err);
+  }
+}
+
+function renderFinancialIndicators(ind) {
+  const fmtNum = (v) => (parseFloat(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const elCurr = document.getElementById('indCurrentLiquidity');
+  const elImm = document.getElementById('indImmediateLiquidity');
+  const elDebt = document.getElementById('indIndebtedness');
+  const elGross = document.getElementById('indGrossMargin');
+  const elNet = document.getElementById('indNetMargin');
+  const elRoeRoa = document.getElementById('indRoeRoa');
+
+  if (elCurr) elCurr.innerText = `${fmtNum(ind.current_liquidity)}x`;
+  if (elImm) elImm.innerText = `${fmtNum(ind.immediate_liquidity)}x`;
+  if (elDebt) elDebt.innerText = `${fmtNum(ind.general_indebtedness_pct)}%`;
+  if (elGross) elGross.innerText = `${fmtNum(ind.gross_margin_pct)}%`;
+  if (elNet) elNet.innerText = `${fmtNum(ind.net_margin_pct)}%`;
+  if (elRoeRoa) elRoeRoa.innerText = `${fmtNum(ind.roe_pct)}% / ${fmtNum(ind.roa_pct)}%`;
 }
 
 function renderDRE(dre) {

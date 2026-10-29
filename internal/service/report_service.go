@@ -56,3 +56,19 @@ func (s *ReportService) GetBalanceSheet(ctx context.Context, companyID uuid.UUID
 	return s.reportRepo.GetBalanceSheetReport(ctx, companyID, refDate)
 }
 
+// GetFinancialIndicators calcula os índices de Liquidez, Endividamento e Rentabilidade do período
+func (s *ReportService) GetFinancialIndicators(ctx context.Context, companyID uuid.UUID, startDate, endDate time.Time) (*domain.FinancialIndicatorsReport, error) {
+	if startDate.After(endDate) {
+		return nil, domain.ErrInvalidDateRange
+	}
+	dre, err := s.reportRepo.GetDREReport(ctx, companyID, startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+	bs, err := s.reportRepo.GetBalanceSheetReport(ctx, companyID, endDate)
+	if err != nil {
+		return nil, err
+	}
+	return domain.CalculateFinancialIndicators(bs, dre), nil
+}
+

@@ -142,4 +142,79 @@ type BalanceSheetReport struct {
 	LiabilityLines          []BalanceSheetLine `json:"liability_lines"`
 }
 
+// FinancialIndicatorsReport representa o painel de Indicadores Econômico-Financeiros (Análise de Balanços)
+type FinancialIndicatorsReport struct {
+	CompanyID              uuid.UUID       `json:"company_id"`
+	StartDate              time.Time       `json:"start_date"`
+	EndDate                time.Time       `json:"end_date"`
+	GeneratedAt            time.Time       `json:"generated_at"`
+	CurrentLiquidity       decimal.Decimal `json:"current_liquidity"`        // Liquidez Corrente (AC / PC)
+	ImmediateLiquidity     decimal.Decimal `json:"immediate_liquidity"`      // Liquidez Imediata (Disponibilidades / PC)
+	GeneralLiquidity       decimal.Decimal `json:"general_liquidity"`        // Liquidez Geral (Ativo Total / Passivo Total)
+	GeneralIndebtednessPct decimal.Decimal `json:"general_indebtedness_pct"` // Endividamento Geral % (Passivo Total / Ativo Total * 100)
+	DebtCompositionPct     decimal.Decimal `json:"debt_composition_pct"`     // Composição do Endividamento % (PC / Passivo Total * 100)
+	GrossMarginPct         decimal.Decimal `json:"gross_margin_pct"`         // Margem Bruta % (Lucro Bruto / Receita Líquida * 100)
+	OperatingMarginPct     decimal.Decimal `json:"operating_margin_pct"`     // Margem Operacional % (Resultado Operacional / Receita Líquida * 100)
+	NetMarginPct           decimal.Decimal `json:"net_margin_pct"`           // Margem Líquida % (Lucro Líquido / Receita Líquida * 100)
+	ROAPct                 decimal.Decimal `json:"roa_pct"`                  // Retorno sobre o Ativo - ROA % (Lucro Líquido / Ativo Total * 100)
+	ROEPct                 decimal.Decimal `json:"roe_pct"`                  // Retorno sobre o PL - ROE % (Lucro Líquido / PL Total * 100)
+}
+
+// CalculateFinancialIndicators computa os índices de Liquidez, Endividamento e Rentabilidade com precisão decimal
+func CalculateFinancialIndicators(bs *BalanceSheetReport, dre *DREReport) *FinancialIndicatorsReport {
+	hundred := decimal.NewFromInt(100)
+	rep := &FinancialIndicatorsReport{
+		CompanyID:   bs.CompanyID,
+		StartDate:   dre.StartDate,
+		EndDate:     dre.EndDate,
+		GeneratedAt: time.Now().UTC(),
+	}
+
+	// Extrai disponibilidades (1.1.01) para Liquidez Imediata
+	cashAndEquivalents := decimal.Zero
+	for _, l := range bs.AssetLines {
+		if l.AccountCode == "1.1.01" {
+			cashAndEquivalents = l.Amount
+			break
+		}
+	}
+	if cashAndEquivalents.IsZero() {
+		for _, l := range bs.AssetLines {
+			if !l.IsSynthetic && len(l.AccountCode) >= 6 && l.AccountCode[:6] == "1.1.01" {
+				cashAndEquivalents = cashAndEquivalents.Add(l.Amount)
+			}
+		}
+	}
+
+	// 1. Liquidez
+	if bs.CurrentLiability.IsPositive() {
+		rep.CurrentLiquidity = bs.CurrentAsset.DivRound(bs.CurrentLiability, 2)
+		rep.ImmediateLiquidity = cashAndEquivalents.DivRound(bs.CurrentLiability, 2)
+	}
+	if bs.TotalLiability.IsPositive() {
+		rep.GeneralLiquidity = bs.TotalAsset.DivRound(bs.TotalLiability, 2)
+		rep.DebtCompositionPct = bs.CurrentLiability.Mul(hundred).DivRound(bs.TotalLiability, 2)
+	}
+
+	// 2. Endividamento e ROA
+	if bs.TotalAsset.IsPositive() {
+		rep.GeneralIndebtednessPct = bs.TotalLiability.Mul(hundred).DivRound(bs.TotalAsset, 2)
+		rep.ROAPct = dre.NetIncome.Mul(hundred).DivRound(bs.TotalAsset, 2)
+	}
+
+	// 3. Margens sobre a Receita Líquida
+	if dre.NetRevenue.IsPositive() {
+		rep.GrossMarginPct = dre.GrossProfit.Mul(hundred).DivRound(dre.NetRevenue, 2)
+		rep.OperatingMarginPct = dre.OperatingResult.Mul(hundred).DivRound(dre.NetRevenue, 2)
+		rep.NetMarginPct = dre.NetIncome.Mul(hundred).DivRound(dre.NetRevenue, 2)
+	}
+
+	// 4. ROE (Retorno sobre o Patrimônio Líquido)
+	if bs.TotalEquity.IsPositive() {
+		rep.ROEPct = dre.NetIncome.Mul(hundred).DivRound(bs.TotalEquity, 2)
+	}
+
+	return rep
+}
+
 

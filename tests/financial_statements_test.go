@@ -100,3 +100,75 @@ func TestBalanceSheetEquation(t *testing.T) {
 	}
 }
 
+// TestCalculateFinancialIndicators valida os cálculos de Liquidez, Endividamento, Margens, ROA e ROE
+func TestCalculateFinancialIndicators(t *testing.T) {
+	companyID := uuid.New()
+	startDate := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+	endDate := time.Date(2026, time.December, 31, 23, 59, 59, 0, time.UTC)
+
+	bs := &domain.BalanceSheetReport{
+		CompanyID:           companyID,
+		ReferenceDate:       endDate,
+		CurrentAsset:        decimal.RequireFromString("120000.00"),
+		NonCurrentAsset:     decimal.RequireFromString("180000.00"),
+		TotalAsset:          decimal.RequireFromString("300000.00"),
+		CurrentLiability:    decimal.RequireFromString("60000.00"),
+		NonCurrentLiability: decimal.RequireFromString("90000.00"),
+		TotalLiability:      decimal.RequireFromString("150000.00"),
+		TotalEquity:         decimal.RequireFromString("150000.00"),
+		AssetLines: []domain.BalanceSheetLine{
+			{
+				AccountCode: "1.1.01",
+				AccountName: "Disponibilidades",
+				Level:       3,
+				Amount:      decimal.RequireFromString("30000.00"),
+				IsSynthetic: true,
+			},
+		},
+	}
+
+	dre := &domain.DREReport{
+		CompanyID:       companyID,
+		StartDate:       startDate,
+		EndDate:         endDate,
+		NetRevenue:      decimal.RequireFromString("200000.00"),
+		GrossProfit:     decimal.RequireFromString("100000.00"),
+		OperatingResult: decimal.RequireFromString("50000.00"),
+		NetIncome:       decimal.RequireFromString("30000.00"),
+	}
+
+	if bs.ReferenceDate.IsZero() || bs.NonCurrentAsset.IsZero() || bs.NonCurrentLiability.IsZero() ||
+		bs.AssetLines[0].AccountName == "" || bs.AssetLines[0].Level == 0 || dre.CompanyID == uuid.Nil {
+		t.Fatal("metadados de entrada inválidos")
+	}
+
+	ind := domain.CalculateFinancialIndicators(bs, dre)
+
+	if ind.CompanyID != companyID || ind.StartDate.IsZero() || ind.EndDate.IsZero() || ind.GeneratedAt.IsZero() {
+		t.Error("metadados do relatório de indicadores não preenchidos")
+	}
+	if !ind.CurrentLiquidity.Equal(decimal.RequireFromString("2.00")) {
+		t.Errorf("Liquidez Corrente esperada 2.00, obtida %s", ind.CurrentLiquidity)
+	}
+	if !ind.ImmediateLiquidity.Equal(decimal.RequireFromString("0.50")) {
+		t.Errorf("Liquidez Imediata esperada 0.50, obtida %s", ind.ImmediateLiquidity)
+	}
+	if !ind.GeneralLiquidity.Equal(decimal.RequireFromString("2.00")) {
+		t.Errorf("Liquidez Geral esperada 2.00, obtida %s", ind.GeneralLiquidity)
+	}
+	if !ind.GeneralIndebtednessPct.Equal(decimal.RequireFromString("50.00")) {
+		t.Errorf("Endividamento Geral esperado 50.00%%, obtido %s%%", ind.GeneralIndebtednessPct)
+	}
+	if !ind.DebtCompositionPct.Equal(decimal.RequireFromString("40.00")) {
+		t.Errorf("Composição do Endividamento esperada 40.00%%, obtida %s%%", ind.DebtCompositionPct)
+	}
+	if !ind.GrossMarginPct.Equal(decimal.RequireFromString("50.00")) ||
+		!ind.OperatingMarginPct.Equal(decimal.RequireFromString("25.00")) ||
+		!ind.NetMarginPct.Equal(decimal.RequireFromString("15.00")) {
+		t.Errorf("Margens incorretas: Bruta=%s, Oper=%s, Liq=%s", ind.GrossMarginPct, ind.OperatingMarginPct, ind.NetMarginPct)
+	}
+	if !ind.ROAPct.Equal(decimal.RequireFromString("10.00")) || !ind.ROEPct.Equal(decimal.RequireFromString("20.00")) {
+		t.Errorf("ROA/ROE incorretos: ROA=%s, ROE=%s", ind.ROAPct, ind.ROEPct)
+	}
+}
+
