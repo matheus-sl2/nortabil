@@ -64,6 +64,9 @@
         <button onclick="switchTab('tabJournal')" class="nav-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-indigo-300 hover:text-white flex items-center space-x-2 whitespace-nowrap">
           <i class="fa-solid fa-book-journal-whills"></i><span>Lançamentos & Diário</span>
         </button>
+        <button onclick="switchTab('tabLedger')" class="nav-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-indigo-300 hover:text-white flex items-center space-x-2 whitespace-nowrap">
+          <i class="fa-solid fa-book-open-reader"></i><span>Livro Razão</span>
+        </button>
         <button onclick="switchTab('tabAccounts')" class="nav-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-indigo-300 hover:text-white flex items-center space-x-2 whitespace-nowrap">
           <i class="fa-solid fa-sitemap"></i><span>Plano de Contas</span>
         </button>
@@ -251,6 +254,43 @@
         </div>
         <div id="journalEntriesList" class="divide-y divide-slate-200 text-sm">
           <div class="p-8 text-center text-slate-400">Carregando lançamentos...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== ABA 2.5: LIVRO RAZÃO ANALÍTICO (GENERAL LEDGER) ==================== -->
+    <div id="tabLedger" class="tab-content hidden space-y-6">
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+          <div>
+            <h3 class="text-base font-bold text-slate-800 flex items-center space-x-2">
+              <i class="fa-solid fa-book-open-reader text-indigo-600"></i>
+              <span>Livro Razão Analítico (General Ledger - NBC ITG 2000)</span>
+            </h3>
+            <p class="text-xs text-slate-500">Rastreamento individual por conta contábil com Saldo Inicial, Partidas Cronológicas, Saldo Acumulado (Running Balance) e Saldo Final</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+            <select id="ledgerAccountSelect" onchange="loadLedgerReport()" class="text-xs border border-slate-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 min-w-[240px]">
+              <option value="">Todas as Contas Movimentadas</option>
+            </select>
+            <input type="date" id="ledgerStartDate" class="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-none" />
+            <span class="text-xs text-slate-400">até</span>
+            <input type="date" id="ledgerEndDate" class="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-none" />
+            <button onclick="loadLedgerReport()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-3.5 py-1.5 rounded-lg text-xs transition flex items-center space-x-1.5 shadow-sm">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <span>Consultar Razão</span>
+            </button>
+            <button onclick="printReport('ledger')" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-semibold px-3 py-1.5 rounded-lg text-xs transition flex items-center space-x-1">
+              <i class="fa-solid fa-print"></i>
+              <span>Imprimir Razão (PDF)</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div id="ledgerAccountsContainer" class="space-y-4">
+        <div class="bg-white p-8 rounded-xl border border-slate-200 text-center text-slate-400 text-sm">
+          Carregando fichas do Livro Razão...
         </div>
       </div>
     </div>

@@ -264,6 +264,63 @@ func (s *ExportService) ExportPrintableHTML(ctx context.Context, companyID uuid.
 			strings.ReplaceAll(bs.TotalLiabilityAndEquity.StringFixed(2), ".", ","))
 		sb.WriteString(`</tbody></table></div></div>`)
 
+	case "ledger", "razao":
+		ledger, err := s.reportRepo.GetLedgerReport(ctx, companyID, startDate, endDate, nil)
+		if err != nil {
+			return "", err
+		}
+		fmt.Fprintf(&sb, `
+  <div class="title-box">LIVRO RAZÃO ANALÍTICO (NBC ITG 2000) - Período: %s a %s</div>
+`, dtIni, dtFin)
+		for _, acc := range ledger.Accounts {
+			if len(acc.Movements) == 0 && acc.InitialBalance.IsZero() && acc.FinalBalance.IsZero() {
+				continue
+			}
+			initStr := strings.ReplaceAll(acc.InitialBalance.StringFixed(2), ".", ",")
+			finStr := strings.ReplaceAll(acc.FinalBalance.StringFixed(2), ".", ",")
+			totDeb := strings.ReplaceAll(acc.TotalDebit.StringFixed(2), ".", ",")
+			totCred := strings.ReplaceAll(acc.TotalCredit.StringFixed(2), ".", ",")
+			fmt.Fprintf(&sb, `
+  <div style="margin-bottom: 18px; page-break-inside: avoid;">
+    <div style="background: #e2e8f0; padding: 6px 10px; font-weight: bold; display: flex; justify-content: space-between; border: 1px solid #cbd5e1; border-bottom: none;">
+      <span>Conta: %s - %s (%s)</span>
+      <span>Saldo Inicial: R$ %s (%s) | Saldo Final: R$ %s (%s)</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 12%%;">Data</th>
+          <th style="width: 10%%;">Lanç. #</th>
+          <th style="width: 38%%;">Histórico da Partida</th>
+          <th style="width: 13%%;" class="text-right">Débito (R$)</th>
+          <th style="width: 13%%;" class="text-right">Crédito (R$)</th>
+          <th style="width: 14%%;" class="text-right">Saldo Acumulado</th>
+        </tr>
+      </thead>
+      <tbody>
+`, acc.AccountCode, acc.AccountName, string(acc.AccountType), initStr, string(acc.InitialNature), finStr, string(acc.FinalNature))
+			for _, m := range acc.Movements {
+				dtMov := m.Date.Format("02/01/2006")
+				debStr := "-"
+				if m.Debit.IsPositive() {
+					debStr = strings.ReplaceAll(m.Debit.StringFixed(2), ".", ",")
+				}
+				credStr := "-"
+				if m.Credit.IsPositive() {
+					credStr = strings.ReplaceAll(m.Credit.StringFixed(2), ".", ",")
+				}
+				runStr := strings.ReplaceAll(m.RunningBalance.StringFixed(2), ".", ",")
+				natSuffix := "D"
+				if m.BalanceNature == "CREDIT" {
+					natSuffix = "C"
+				}
+				fmt.Fprintf(&sb, "<tr><td>%s</td><td>#%d</td><td>%s</td><td class=\"text-right\">%s</td><td class=\"text-right\">%s</td><td class=\"text-right font-bold\">%s %s</td></tr>\n",
+					dtMov, m.EntryNumber, m.Description, debStr, credStr, runStr, natSuffix)
+			}
+			fmt.Fprintf(&sb, "<tr class=\"bg-total\"><td colspan=\"3\">TOTAIS DA CONTA NO PERÍODO</td><td class=\"text-right\">R$ %s</td><td class=\"text-right\">R$ %s</td><td class=\"text-right\">R$ %s (%s)</td></tr></tbody></table></div>\n",
+				totDeb, totCred, finStr, string(acc.FinalNature))
+		}
+
 	default: // Balancete
 		report, err := s.reportRepo.GetTrialBalanceReport(ctx, companyID, startDate, endDate)
 		if err != nil {

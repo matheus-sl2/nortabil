@@ -31,6 +31,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (startInput) startInput.value = `${currentYear}-01-01`;
   if (endInput) endInput.value = `${currentYear}-12-31`;
 
+  const ledgerStart = document.getElementById('ledgerStartDate');
+  const ledgerEnd = document.getElementById('ledgerEndDate');
+  if (ledgerStart) ledgerStart.value = `${currentYear}-01-01`;
+  if (ledgerEnd) ledgerEnd.value = `${currentYear}-12-31`;
+
   await initAuthSession();
   await loadCompanies();
   if (currentCompanyId) {
@@ -235,6 +240,10 @@ function switchTab(tabId) {
   // Recarrega dados específicos da aba
   if (tabId === 'tabDashboard') loadDashboard();
   if (tabId === 'tabJournal') loadJournalEntries();
+  if (tabId === 'tabLedger') {
+    populateLedgerAccountSelect();
+    loadLedgerReport();
+  }
   if (tabId === 'tabAccounts') renderAccountsTable();
   if (tabId === 'tabOFX') populateOFXSelects();
   if (tabId === 'tabStatements') loadFinancialStatements();
@@ -448,7 +457,8 @@ async function handleCreateAccount(e) {
 async function loadDashboard() {
   if (!currentCompanyId) return;
   try {
-    const res = await fetch(`/api/v1/companies/${currentCompanyId}/reports/trial-balance`);
+    const currentYear = new Date().getFullYear();
+    const res = await fetch(`/api/v1/companies/${currentCompanyId}/reports/trial-balance?start_date=${currentYear}-01-01&end_date=${currentYear}-12-31`);
     const json = await res.json();
     if (!json.success) throw new Error(json.message);
 
@@ -720,6 +730,128 @@ function updateJournalAccountSelects() {
     select.innerHTML = '<option value="" disabled selected>Selecione a conta analítica...</option>' +
       analyticalAccounts.map(a => `<option value="${a.id}" ${a.id === curr ? 'selected' : ''}>${a.code} - ${a.name}</option>`).join('');
   });
+  populateLedgerAccountSelect();
+}
+
+// ==========================================
+// LIVRO RAZÃO ANALÍTICO (GENERAL LEDGER)
+// ==========================================
+function populateLedgerAccountSelect() {
+  const select = document.getElementById('ledgerAccountSelect');
+  if (!select) return;
+  const curr = select.value;
+  const analyticalAccounts = cachedAccounts.filter(a => !a.is_synthetic);
+  select.innerHTML = '<option value="">Todas as Contas Movimentadas</option>' +
+    analyticalAccounts.map(a => `<option value="${a.id}" ${a.id === curr ? 'selected' : ''}>${a.code} - ${a.name}</option>`).join('');
+}
+
+async function loadLedgerReport() {
+  if (!currentCompanyId) return;
+  const container = document.getElementById('ledgerAccountsContainer');
+  if (!container) return;
+
+  const currentYear = new Date().getFullYear();
+  const startDate = document.getElementById('ledgerStartDate')?.value || `${currentYear}-01-01`;
+  const endDate = document.getElementById('ledgerEndDate')?.value || `${currentYear}-12-31`;
+  const accountId = document.getElementById('ledgerAccountSelect')?.value || '';
+
+  let url = `/api/v1/companies/${currentCompanyId}/reports/ledger?start_date=${startDate}&end_date=${endDate}`;
+  if (accountId) {
+    url += `&account_id=${encodeURIComponent(accountId)}`;
+  }
+
+  try {
+    const res = await fetch(url);
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json.error?.message || json.message || 'Falha ao consultar Livro Razão');
+    }
+
+    const report = json.data || {};
+    const accounts = (report.accounts || []).filter(acc => {
+      if (accountId) return true;
+      const hasMovements = Array.isArray(acc.movements) && acc.movements.length > 0;
+      const hasInit = parseFloat(acc.initial_balance) > 0;
+      const hasFin = parseFloat(acc.final_balance) > 0;
+      return hasMovements || hasInit || hasFin;
+    });
+
+    if (accounts.length === 0) {
+      container.innerHTML = `
+        <div class="bg-white p-8 rounded-xl border border-slate-200 text-center text-slate-400 text-sm">
+          Nenhuma movimentação encontrada para os filtros selecionados no Livro Razão.
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = accounts.map(acc => {
+      const movements = acc.movements || [];
+      const initNat = acc.initial_nature === 'DEBIT' ? 'D' : 'C';
+      const finNat = acc.final_nature === 'DEBIT' ? 'D' : 'C';
+
+      const rowsHtml = movements.length === 0
+        ? `<tr><td colspan="6" class="px-4 py-4 text-center text-slate-400">Sem partidas no período selecionado.</td></tr>`
+        : movements.map(m => {
+            const debVal = parseFloat(m.debit) || 0;
+            const credVal = parseFloat(m.credit) || 0;
+            const runNat = m.balance_nature === 'DEBIT' ? 'D' : 'C';
+            return `
+              <tr class="hover:bg-slate-50 transition">
+                <td class="px-4 py-2 whitespace-nowrap">${new Date(m.date).toLocaleDateString('pt-BR')}</td>
+                <td class="px-4 py-2 font-bold text-indigo-700">#${m.entry_number}</td>
+                <td class="px-4 py-2 text-slate-700 font-sans">${m.description}</td>
+                <td class="px-4 py-2 text-right ${debVal > 0 ? 'text-rose-700 font-semibold' : 'text-slate-300'}">${debVal > 0 ? formatBRL(debVal) : '-'}</td>
+                <td class="px-4 py-2 text-right ${credVal > 0 ? 'text-emerald-700 font-semibold' : 'text-slate-300'}">${credVal > 0 ? formatBRL(credVal) : '-'}</td>
+                <td class="px-4 py-2 text-right font-bold text-slate-900">${formatBRL(m.running_balance)} <span class="text-[10px] px-1.5 py-0.5 rounded ${runNat === 'D' ? 'badge-debit' : 'badge-credit'}">${runNat}</span></td>
+              </tr>
+            `;
+          }).join('');
+
+      return `
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="px-5 py-3 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+            <div>
+              <span class="font-mono text-xs font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">${acc.account_code}</span>
+              <span class="font-bold text-slate-800 text-sm ml-2">${acc.account_name}</span>
+              <span class="text-[11px] text-slate-400 ml-2">(${acc.account_type})</span>
+            </div>
+            <div class="flex items-center space-x-4 text-xs font-mono">
+              <span class="text-slate-600">Saldo Inicial: <b>${formatBRL(acc.initial_balance)} (${initNat})</b></span>
+              <span class="text-slate-900 bg-slate-200/70 px-2.5 py-1 rounded font-bold">Saldo Final: ${formatBRL(acc.final_balance)} (${finNat})</span>
+            </div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs font-mono text-slate-600">
+              <thead class="bg-slate-100/80 text-[11px] uppercase font-semibold text-slate-500 border-b border-slate-200">
+                <tr>
+                  <th class="px-4 py-2.5">Data</th>
+                  <th class="px-4 py-2.5">Lanç. #</th>
+                  <th class="px-4 py-2.5">Histórico da Partida</th>
+                  <th class="px-4 py-2.5 text-right">Débito</th>
+                  <th class="px-4 py-2.5 text-right">Crédito</th>
+                  <th class="px-4 py-2.5 text-right">Saldo Acumulado</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                ${rowsHtml}
+              </tbody>
+              <tfoot class="bg-slate-50 font-bold text-slate-800 border-t border-slate-200">
+                <tr>
+                  <td colspan="3" class="px-4 py-2 text-right uppercase text-[11px] text-slate-500">Totais da Conta no Período:</td>
+                  <td class="px-4 py-2 text-right text-rose-700">${formatBRL(acc.total_debit)}</td>
+                  <td class="px-4 py-2 text-right text-emerald-700">${formatBRL(acc.total_credit)}</td>
+                  <td class="px-4 py-2 text-right">${formatBRL(acc.final_balance)} (${finNat})</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (err) {
+    container.innerHTML = `<div class="bg-rose-50 p-4 rounded-xl border border-rose-200 text-rose-700 text-xs font-semibold">Erro ao carregar Livro Razão: ${err.message}</div>`;
+  }
 }
 
 // ==========================================
@@ -1036,10 +1168,17 @@ function printReport(type) {
   let startDate = `${new Date().getFullYear()}-01-01`;
   let endDate = `${new Date().getFullYear()}-12-31`;
 
-  const sInput = document.getElementById('statementStartDate');
-  const eInput = document.getElementById('statementEndDate');
-  if (sInput && sInput.value) startDate = sInput.value;
-  if (eInput && eInput.value) endDate = eInput.value;
+  if (type === 'ledger') {
+    const lStart = document.getElementById('ledgerStartDate');
+    const lEnd = document.getElementById('ledgerEndDate');
+    if (lStart && lStart.value) startDate = lStart.value;
+    if (lEnd && lEnd.value) endDate = lEnd.value;
+  } else {
+    const sInput = document.getElementById('statementStartDate');
+    const eInput = document.getElementById('statementEndDate');
+    if (sInput && sInput.value) startDate = sInput.value;
+    if (eInput && eInput.value) endDate = eInput.value;
+  }
 
   const tokenParam = authToken ? `&token=${encodeURIComponent(authToken)}` : '';
   const url = `/api/v1/companies/${currentCompanyId}/reports/export/print?type=${type}&start_date=${startDate}&end_date=${endDate}${tokenParam}`;
