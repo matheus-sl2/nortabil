@@ -2,12 +2,13 @@
 # Makefile para o Projeto Nortabil (Motor de Partidas Dobradas)
 # ==============================================================================
 
-.PHONY: help build run test test-coverage docker-up docker-down docker-logs clean
+.PHONY: help build run test test-coverage seed docker-up docker-down docker-logs clean
 
 help:
 	@echo "Comandos disponíveis:"
 	@echo "  make build         - Compila o binário da aplicação"
 	@echo "  make run           - Executa a aplicação localmente"
+	@echo "  make seed          - Executa a carga demonstrativa com dados do Norte de Minas"
 	@echo "  make test          - Executa todos os testes unitários e de concorrência"
 	@echo "  make test-coverage - Executa os testes e gera relatório de cobertura HTML"
 	@echo "  make docker-up     - Sobe todo o ambiente conteinerizado (API + PostgreSQL)"
@@ -20,6 +21,9 @@ build:
 
 run:
 	go run ./cmd/api
+
+seed:
+	go run ./cmd/seed/main.go
 
 test:
 	go test -v ./tests/...
