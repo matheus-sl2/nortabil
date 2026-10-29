@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/matheus-sl2/nortabil/internal/middleware"
 	"github.com/matheus-sl2/nortabil/internal/repository/postgres"
+	"github.com/matheus-sl2/nortabil/web"
 )
 
 // SetupRouter configura as rotas e middlewares da aplicação HTTP
@@ -96,6 +97,9 @@ func SetupRouter(
 </html>`
 		_, _ = w.Write([]byte(swaggerHTML))
 	})
+
+	// Registra interface web estática (Dashboard Contábil)
+	web.RegisterWebRoutes(r)
 
 	// Agrupamento da API v1
 	r.Route("/api/v1", func(api chi.Router) {

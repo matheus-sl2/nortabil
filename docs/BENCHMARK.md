@@ -86,3 +86,4 @@ Os ensaios empíricos demonstram a robustez teórica e prática do projeto:
 - A Lei de Luca Pacioli é respeitada como invariante matemático absoluto: **zero lançamentos desbalanceados foram aceitos** em todos os ensaios de estresse.
 - O custo computacional de validação é ínfimo, tornando a solução viável tanto para grandes escritórios centralizadores quanto para pequenas empresas rurais do Vale do Rio São Francisco que operam com infraestrutura enxuta.
 - O sistema demonstra total prontidão para a defesa da monografia do Trabalho de Conclusão de Curso (TCC).
+
