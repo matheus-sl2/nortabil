@@ -51,6 +51,7 @@ func main() {
 	var reportHandler *handler.ReportHandler
 	var periodHandler *handler.PeriodHandler
 	var reconciliationHandler *handler.ReconciliationHandler
+	var spedHandler *handler.SPEDHandler
 
 	if db != nil {
 		companyRepo := postgres.NewCompanyRepository(db)
@@ -66,6 +67,7 @@ func main() {
 		reportService := service.NewReportService(reportRepo)
 		periodService := service.NewPeriodService(periodRepo, journalRepo, accountRepo)
 		ofxService := service.NewOFXService(reconciliationRepo, journalService, accountRepo)
+		spedService := service.NewSPEDService(companyRepo, accountRepo, journalRepo)
 
 		companyHandler = handler.NewCompanyHandler(companyService)
 		accountHandler = handler.NewAccountHandler(accountService)
@@ -73,10 +75,11 @@ func main() {
 		reportHandler = handler.NewReportHandler(reportService)
 		periodHandler = handler.NewPeriodHandler(periodService)
 		reconciliationHandler = handler.NewReconciliationHandler(ofxService)
+		spedHandler = handler.NewSPEDHandler(spedService)
 	}
 
 	// 4. Configuração das Rotas e Servidor HTTP
-	router := handler.SetupRouter(db, companyHandler, accountHandler, journalHandler, reportHandler, periodHandler, reconciliationHandler, docs.SwaggerYAML)
+	router := handler.SetupRouter(db, companyHandler, accountHandler, journalHandler, reportHandler, periodHandler, reconciliationHandler, spedHandler, docs.SwaggerYAML)
 
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%s", cfg.Port),

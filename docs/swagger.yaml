@@ -643,6 +643,61 @@ paths:
                 items:
                   $ref: '#/components/schemas/BankStatementItem'
 
+  /api/v1/export/sped-ecd:
+    get:
+      summary: Exportar Escrituração Contábil Digital (SPED ECD)
+      description: Gera o arquivo oficial do SPED ECD (Livro Diário Geral - Forma G) com os Blocos 0, I, J e 9 em estrita conformidade com o Manual de Orientação do Leiaute da ECD (RFB/CFC).
+      tags:
+        - Exportação Fiscal e SPED
+      parameters:
+        - name: year
+          in: query
+          schema:
+            type: integer
+            example: 2026
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: auditor_crc
+          in: query
+          schema:
+            type: string
+            example: "MG-085421/O"
+        - name: auditor_name
+          in: query
+          schema:
+            type: string
+            example: "Sebastião Ferreira da Silva"
+        - name: auditor_cpf
+          in: query
+          schema:
+            type: string
+            example: "12345678909"
+        - name: signatory_name
+          in: query
+          schema:
+            type: string
+            example: "Manoel de Oliveira"
+        - name: signatory_cpf
+          in: query
+          schema:
+            type: string
+            example: "98765432100"
+      responses:
+        '200':
+          description: Arquivo SPED ECD pronto para importação e validação no PVA da Receita Federal
+          content:
+            text/plain:
+              schema:
+                type: string
+
 components:
   schemas:
     CreateCompanyInput:

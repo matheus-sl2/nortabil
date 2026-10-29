@@ -21,6 +21,7 @@ func SetupRouter(
 	reportHandler *ReportHandler,
 	periodHandler *PeriodHandler,
 	reconciliationHandler *ReconciliationHandler,
+	spedHandler *SPEDHandler,
 	swaggerYAML []byte,
 ) http.Handler {
 	r := chi.NewRouter()
@@ -139,6 +140,8 @@ func SetupRouter(
 					rec.Post("/import-ofx", reconciliationHandler.ImportOFX)
 					rec.Get("/items", reconciliationHandler.ListItems)
 				})
+
+				sub.Get("/export/sped-ecd", spedHandler.ExportECD)
 			})
 		})
 
@@ -177,6 +180,8 @@ func SetupRouter(
 				rec.Post("/import-ofx", reconciliationHandler.ImportOFX)
 				rec.Get("/items", reconciliationHandler.ListItems)
 			})
+
+			tenantGroup.Get("/export/sped-ecd", spedHandler.ExportECD)
 		})
 	})
 

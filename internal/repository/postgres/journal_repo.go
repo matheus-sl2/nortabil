@@ -245,3 +245,91 @@ func (r *JournalRepository) List(ctx context.Context, f ListFilter) ([]domain.Jo
 
 	return entries, total, nil
 }
+
+// GetEntriesForPeriod busca todos os lançamentos com suas partidas no intervalo de datas em ordem cronológica
+func (r *JournalRepository) GetEntriesForPeriod(ctx context.Context, companyID uuid.UUID, startDate, endDate time.Time) ([]domain.JournalEntry, error) {
+	if companyID == uuid.Nil {
+		companyID = domain.DefaultCompanyID
+	}
+
+	entriesQuery := `
+		SELECT id, company_id, entry_number, date, description, status, total_debit, total_credit, created_at, updated_at
+		FROM journal_entry
+		WHERE company_id = $1 AND date >= $2 AND date <= $3
+		ORDER BY date ASC, entry_number ASC
+	`
+	rows, err := r.db.Pool.Query(ctx, entriesQuery, companyID, startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao buscar lançamentos do período: %w", err)
+	}
+	defer rows.Close()
+
+	entryMap := make(map[uuid.UUID]*domain.JournalEntry)
+	var orderedEntries []domain.JournalEntry
+
+	for rows.Next() {
+		var e domain.JournalEntry
+		if err := rows.Scan(
+			&e.ID,
+			&e.CompanyID,
+			&e.EntryNumber,
+			&e.Date,
+			&e.Description,
+			&e.Status,
+			&e.TotalDebit,
+			&e.TotalCredit,
+			&e.CreatedAt,
+			&e.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("erro ao ler lançamento: %w", err)
+		}
+		e.Lines = make([]domain.JournalLine, 0)
+		orderedEntries = append(orderedEntries, e)
+	}
+
+	for i := range orderedEntries {
+		entryMap[orderedEntries[i].ID] = &orderedEntries[i]
+	}
+
+	if len(orderedEntries) == 0 {
+		return orderedEntries, nil
+	}
+
+	linesQuery := `
+		SELECT jl.id, jl.journal_entry_id, jl.account_id, a.code, a.name, jl.type, jl.amount, COALESCE(jl.description, ''), jl.created_at
+		FROM journal_line jl
+		JOIN journal_entry je ON je.id = jl.journal_entry_id
+		JOIN account a ON a.id = jl.account_id
+		WHERE je.company_id = $1 AND je.date >= $2 AND je.date <= $3
+		ORDER BY je.date ASC, je.entry_number ASC, jl.type DESC, jl.amount DESC
+	`
+	lineRows, err := r.db.Pool.Query(ctx, linesQuery, companyID, startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao buscar partidas do período: %w", err)
+	}
+	defer lineRows.Close()
+
+	for lineRows.Next() {
+		var l domain.JournalLine
+		if err := lineRows.Scan(
+			&l.ID,
+			&l.JournalEntryID,
+			&l.AccountID,
+			&l.AccountCode,
+			&l.AccountName,
+			&l.Type,
+			&l.Amount,
+			&l.Description,
+			&l.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("erro ao ler partida do período: %w", err)
+		}
+
+		if entryPtr, ok := entryMap[l.JournalEntryID]; ok {
+			entryPtr.Lines = append(entryPtr.Lines, l)
+		}
+	}
+
+	return orderedEntries, nil
+}
+
