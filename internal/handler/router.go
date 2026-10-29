@@ -23,6 +23,7 @@ func SetupRouter(
 	periodHandler *PeriodHandler,
 	reconciliationHandler *ReconciliationHandler,
 	spedHandler *SPEDHandler,
+	exportHandler *ExportHandler,
 	swaggerYAML []byte,
 ) http.Handler {
 	r := chi.NewRouter()
@@ -133,6 +134,8 @@ func SetupRouter(
 					rep.Get("/trial-balance", reportHandler.GetTrialBalance)
 					rep.Get("/dre", reportHandler.GetDRE)
 					rep.Get("/balance-sheet", reportHandler.GetBalanceSheet)
+					rep.Get("/export/csv", exportHandler.ExportCSV)
+					rep.Get("/export/print", exportHandler.ExportPrintable)
 				})
 
 				sub.Route("/periods", func(per chi.Router) {
@@ -175,6 +178,8 @@ func SetupRouter(
 				rep.Get("/trial-balance", reportHandler.GetTrialBalance)
 				rep.Get("/dre", reportHandler.GetDRE)
 				rep.Get("/balance-sheet", reportHandler.GetBalanceSheet)
+				rep.Get("/export/csv", exportHandler.ExportCSV)
+				rep.Get("/export/print", exportHandler.ExportPrintable)
 			})
 
 			tenantGroup.Route("/periods", func(per chi.Router) {

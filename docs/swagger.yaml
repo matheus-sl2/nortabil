@@ -521,6 +521,66 @@ paths:
               schema:
                 $ref: '#/components/schemas/BalanceSheetReport'
 
+  /api/v1/reports/export/csv:
+    get:
+      summary: Exportar Relatórios para Planilha CSV (Excel)
+      description: Gera arquivo CSV com encoding UTF-8 com BOM e separador de ponto e vírgula para abertura automática e compatível no Microsoft Excel.
+      tags:
+        - Relatórios Legais
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [trial-balance, dre]
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Planilha em formato CSV para download
+          content:
+            text/csv:
+              schema:
+                type: string
+
+  /api/v1/reports/export/print:
+    get:
+      summary: Relatório Oficial para Impressão e PDF
+      description: Retorna página HTML5 estilizada com CSS para impressão ou geração de PDF oficial contendo folha de rosto, cabeçalho da empresa, termos de escrituração e campos de assinatura do Contador e do Representante Legal.
+      tags:
+        - Relatórios Legais
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [trial-balance, dre, balance-sheet]
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Layout HTML de impressão
+          content:
+            text/html:
+              schema:
+                type: string
+
   /api/v1/periods:
     get:
       summary: Listar Períodos Contábeis

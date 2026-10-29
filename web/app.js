@@ -785,6 +785,38 @@ function renderBalanceSheet(bs) {
 }
 
 // ==========================================
+// EXPORTAÇÃO E IMPRESSÃO DE RELATÓRIOS
+// ==========================================
+function exportTrialBalanceCSV() {
+  if (!currentCompanyId) return;
+  const currentYear = new Date().getFullYear();
+  const url = `/api/v1/companies/${currentCompanyId}/reports/export/csv?type=trial-balance&start_date=${currentYear}-01-01&end_date=${currentYear}-12-31`;
+  window.open(url, '_blank');
+}
+
+function exportDRECSV() {
+  if (!currentCompanyId) return;
+  const startDate = document.getElementById('statementStartDate')?.value || `${new Date().getFullYear()}-01-01`;
+  const endDate = document.getElementById('statementEndDate')?.value || `${new Date().getFullYear()}-12-31`;
+  const url = `/api/v1/companies/${currentCompanyId}/reports/export/csv?type=dre&start_date=${startDate}&end_date=${endDate}`;
+  window.open(url, '_blank');
+}
+
+function printReport(type) {
+  if (!currentCompanyId) return;
+  let startDate = `${new Date().getFullYear()}-01-01`;
+  let endDate = `${new Date().getFullYear()}-12-31`;
+
+  const sInput = document.getElementById('statementStartDate');
+  const eInput = document.getElementById('statementEndDate');
+  if (sInput && sInput.value) startDate = sInput.value;
+  if (eInput && eInput.value) endDate = eInput.value;
+
+  const url = `/api/v1/companies/${currentCompanyId}/reports/export/print?type=${type}&start_date=${startDate}&end_date=${endDate}`;
+  window.open(url, '_blank');
+}
+
+// ==========================================
 // UTILITÁRIOS
 // ==========================================
 function formatBRL(val) {

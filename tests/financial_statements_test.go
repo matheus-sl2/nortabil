@@ -99,3 +99,4 @@ func TestBalanceSheetEquation(t *testing.T) {
 		t.Errorf("Total Passivo + PL incorreto: %s", bs.TotalLiabilityAndEquity)
 	}
 }
+
