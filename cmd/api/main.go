@@ -53,6 +53,8 @@ func main() {
 	var reconciliationHandler *handler.ReconciliationHandler
 	var spedHandler *handler.SPEDHandler
 	var exportHandler *handler.ExportHandler
+	var authHandler *handler.AuthHandler
+	var authService *service.AuthService
 
 	if db != nil {
 		companyRepo := postgres.NewCompanyRepository(db)
@@ -61,6 +63,7 @@ func main() {
 		reportRepo := postgres.NewReportRepository(db, accountRepo)
 		periodRepo := postgres.NewPeriodRepository(db)
 		reconciliationRepo := postgres.NewReconciliationRepository(db)
+		userRepo := postgres.NewUserRepository(db)
 
 		companyService := service.NewCompanyService(companyRepo)
 		accountService := service.NewAccountService(accountRepo)
@@ -70,6 +73,7 @@ func main() {
 		ofxService := service.NewOFXService(reconciliationRepo, journalService, accountRepo)
 		spedService := service.NewSPEDService(companyRepo, accountRepo, journalRepo)
 		exportService := service.NewExportService(companyRepo, reportRepo)
+		authService = service.NewAuthService(userRepo, cfg.JWTSecret)
 
 		companyHandler = handler.NewCompanyHandler(companyService)
 		accountHandler = handler.NewAccountHandler(accountService)
@@ -79,10 +83,11 @@ func main() {
 		reconciliationHandler = handler.NewReconciliationHandler(ofxService)
 		spedHandler = handler.NewSPEDHandler(spedService)
 		exportHandler = handler.NewExportHandler(exportService)
+		authHandler = handler.NewAuthHandler(authService)
 	}
 
 	// 4. Configuração das Rotas e Servidor HTTP
-	router := handler.SetupRouter(db, companyHandler, accountHandler, journalHandler, reportHandler, periodHandler, reconciliationHandler, spedHandler, exportHandler, docs.SwaggerYAML)
+	router := handler.SetupRouter(db, companyHandler, accountHandler, journalHandler, reportHandler, periodHandler, reconciliationHandler, spedHandler, exportHandler, authHandler, authService, docs.SwaggerYAML)
 
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%s", cfg.Port),

@@ -19,6 +19,7 @@ type Config struct {
 	DBMaxConnLifetime  time.Duration
 	AutoMigrate        bool
 	AutoSeed           bool
+	JWTSecret          string
 }
 
 // Load carrega as variáveis de ambiente a partir do arquivo .env ou do ambiente operacional
@@ -34,6 +35,7 @@ func Load() (*Config, error) {
 		DBMaxConnLifetime: time.Duration(getEnvAsInt("DB_MAX_CONN_LIFETIME_MINUTES", 30)) * time.Minute,
 		AutoMigrate:       getEnvAsBool("AUTO_MIGRATE", true),
 		AutoSeed:          getEnvAsBool("AUTO_SEED", true),
+		JWTSecret:         getEnv("JWT_SECRET", "nortabil_secret_key_tcc_januaria_2026_super_segura"),
 	}
 
 	dbURL := os.Getenv("DATABASE_URL")

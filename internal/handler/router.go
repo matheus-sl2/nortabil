@@ -8,8 +8,11 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/google/uuid"
+	"github.com/matheus-sl2/nortabil/internal/domain"
 	"github.com/matheus-sl2/nortabil/internal/middleware"
 	"github.com/matheus-sl2/nortabil/internal/repository/postgres"
+	"github.com/matheus-sl2/nortabil/internal/service"
 	"github.com/matheus-sl2/nortabil/web"
 )
 
@@ -24,6 +27,8 @@ func SetupRouter(
 	reconciliationHandler *ReconciliationHandler,
 	spedHandler *SPEDHandler,
 	exportHandler *ExportHandler,
+	authHandler *AuthHandler,
+	authService *service.AuthService,
 	swaggerYAML []byte,
 ) http.Handler {
 	r := chi.NewRouter()
@@ -33,6 +38,17 @@ func SetupRouter(
 	r.Use(chimiddleware.Timeout(60 * time.Second))
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logger)
+
+	// Injeta claims JWT se token for enviado
+	if authService != nil {
+		r.Use(middleware.AuthMiddleware(func(tokenStr string) (uuid.UUID, string, string, domain.UserRole, error) {
+			claims, err := authService.ValidateToken(tokenStr)
+			if err != nil {
+				return uuid.Nil, "", "", "", err
+			}
+			return claims.UserID, claims.Email, claims.Name, claims.Role, nil
+		}))
+	}
 
 	// Configuração de CORS (Cross-Origin Resource Sharing)
 	r.Use(cors.Handler(cors.Options{
@@ -104,6 +120,16 @@ func SetupRouter(
 
 	// Agrupamento da API v1
 	r.Route("/api/v1", func(api chi.Router) {
+		// Rotas de Autenticação e Gestão de Usuários
+		if authHandler != nil {
+			api.Route("/auth", func(auth chi.Router) {
+				auth.Post("/login", authHandler.Login)
+				auth.Post("/register", authHandler.Register)
+				auth.Get("/me", authHandler.Me)
+				auth.Get("/users", authHandler.ListUsers)
+			})
+		}
+
 		// Rotas de Empresas / Clientes do Escritório
 		api.Route("/companies", func(comp chi.Router) {
 			comp.Post("/", companyHandler.Create)

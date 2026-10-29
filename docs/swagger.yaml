@@ -24,6 +24,77 @@ paths:
         '503':
           description: Banco de dados inacessível
 
+  /api/v1/auth/login:
+    post:
+      summary: Autenticar usuário (Login)
+      description: Valida credenciais e retorna token de autenticação JWT assinado com claims de usuário e perfil de acesso (RBAC).
+      tags:
+        - Autenticação e RBAC
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  example: "contador@nortabil.com.br"
+                password:
+                  type: string
+                  example: "Nortabil@2026"
+      responses:
+        '200':
+          description: Login bem-sucedido com token JWT
+        '401':
+          description: Credenciais inválidas
+
+  /api/v1/auth/register:
+    post:
+      summary: Cadastrar novo usuário (Contador, Assistente ou Admin)
+      description: Cria usuário no sistema contábil com senha hasheada em Bcrypt com salt.
+      tags:
+        - Autenticação e RBAC
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password, role]
+              properties:
+                name:
+                  type: string
+                  example: "João Silva Santos"
+                email:
+                  type: string
+                  example: "joao@nortabil.com.br"
+                password:
+                  type: string
+                  example: "Senha@123"
+                role:
+                  type: string
+                  enum: [ADMIN, CONTADOR, ASSISTENTE]
+                crc_number:
+                  type: string
+                  example: "MG-099887/O"
+      responses:
+        '201':
+          description: Usuário criado com sucesso
+
+  /api/v1/auth/me:
+    get:
+      summary: Dados do usuário autenticado
+      description: Retorna os dados do token JWT do usuário ativo na sessão.
+      tags:
+        - Autenticação e RBAC
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Perfil do usuário logado
+
   /api/v1/companies:
     post:
       summary: Cadastrar empresa / cliente do escritório
@@ -1181,4 +1252,10 @@ components:
           type: string
         is_balanced:
           type: boolean
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
 
