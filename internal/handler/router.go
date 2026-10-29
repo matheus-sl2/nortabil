@@ -131,6 +131,8 @@ func SetupRouter(
 					rep.Get("/ledger", reportHandler.GetLedger)
 					rep.Get("/journal", reportHandler.GetDailyBook)
 					rep.Get("/trial-balance", reportHandler.GetTrialBalance)
+					rep.Get("/dre", reportHandler.GetDRE)
+					rep.Get("/balance-sheet", reportHandler.GetBalanceSheet)
 				})
 
 				sub.Route("/periods", func(per chi.Router) {
@@ -171,6 +173,8 @@ func SetupRouter(
 				rep.Get("/ledger", reportHandler.GetLedger)
 				rep.Get("/journal", reportHandler.GetDailyBook)
 				rep.Get("/trial-balance", reportHandler.GetTrialBalance)
+				rep.Get("/dre", reportHandler.GetDRE)
+				rep.Get("/balance-sheet", reportHandler.GetBalanceSheet)
 			})
 
 			tenantGroup.Route("/periods", func(per chi.Router) {

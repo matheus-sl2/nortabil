@@ -42,3 +42,17 @@ func (s *ReportService) GetTrialBalance(ctx context.Context, companyID uuid.UUID
 	}
 	return s.reportRepo.GetTrialBalanceReport(ctx, companyID, startDate, endDate)
 }
+
+// GetDRE gera a Demonstração do Resultado do Exercício
+func (s *ReportService) GetDRE(ctx context.Context, companyID uuid.UUID, startDate, endDate time.Time) (*domain.DREReport, error) {
+	if startDate.After(endDate) {
+		return nil, domain.ErrInvalidDateRange
+	}
+	return s.reportRepo.GetDREReport(ctx, companyID, startDate, endDate)
+}
+
+// GetBalanceSheet gera o Balanço Patrimonial Estruturado
+func (s *ReportService) GetBalanceSheet(ctx context.Context, companyID uuid.UUID, refDate time.Time) (*domain.BalanceSheetReport, error) {
+	return s.reportRepo.GetBalanceSheetReport(ctx, companyID, refDate)
+}
+

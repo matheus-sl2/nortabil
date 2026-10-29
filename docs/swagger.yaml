@@ -476,6 +476,51 @@ paths:
         '200':
           description: Balancete de Verificação
 
+  /api/v1/reports/dre:
+    get:
+      summary: Demonstração do Resultado do Exercício (DRE)
+      description: Emite a DRE estruturada com Receita Bruta, Deduções, Receita Líquida, Custos (CMV), Lucro Bruto, Despesas Operacionais, Resultado Operacional e Lucro/Prejuízo Líquido conforme a Lei 6.404/76 e NBC TG 26.
+      tags:
+        - Relatórios Legais
+      parameters:
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Demonstração do Resultado do Exercício
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DREReport'
+
+  /api/v1/reports/balance-sheet:
+    get:
+      summary: Balanço Patrimonial Estruturado
+      description: Emite o Balanço Patrimonial formal com a segregação de Ativo Circulante, Não Circulante, Passivo Circulante, Não Circulante e Patrimônio Líquido com verificação matemática de equilíbrio (Ativo = Passivo + PL).
+      tags:
+        - Relatórios Legais
+      parameters:
+        - name: date
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Balanço Patrimonial Estruturado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceSheetReport'
+
   /api/v1/periods:
     get:
       summary: Listar Períodos Contábeis
@@ -1007,4 +1052,73 @@ components:
         created_at:
           type: string
           format: date-time
+
+    DREReport:
+      type: object
+      properties:
+        company_id:
+          type: string
+          format: uuid
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        gross_revenue:
+          type: string
+        deductions:
+          type: string
+        net_revenue:
+          type: string
+        cost_of_goods_sold:
+          type: string
+        gross_profit:
+          type: string
+        operating_expenses:
+          type: string
+        operating_result:
+          type: string
+        financial_revenues:
+          type: string
+        financial_expenses:
+          type: string
+        pre_tax_profit:
+          type: string
+        income_tax_provision:
+          type: string
+        net_income:
+          type: string
+
+    BalanceSheetReport:
+      type: object
+      properties:
+        company_id:
+          type: string
+          format: uuid
+        reference_date:
+          type: string
+          format: date
+        current_asset:
+          type: string
+        non_current_asset:
+          type: string
+        total_asset:
+          type: string
+        current_liability:
+          type: string
+        non_current_liability:
+          type: string
+        total_liability:
+          type: string
+        equity:
+          type: string
+        year_profit_loss:
+          type: string
+        total_equity:
+          type: string
+        total_liability_and_equity:
+          type: string
+        is_balanced:
+          type: boolean
 

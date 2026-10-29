@@ -65,6 +65,9 @@
         <button onclick="switchTab('tabPeriods')" class="nav-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-indigo-300 hover:text-white flex items-center space-x-2 whitespace-nowrap">
           <i class="fa-solid fa-calendar-check"></i><span>Períodos & ARE</span>
         </button>
+        <button onclick="switchTab('tabStatements')" class="nav-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-indigo-300 hover:text-white flex items-center space-x-2 whitespace-nowrap">
+          <i class="fa-solid fa-file-lines"></i><span>DRE & Balanço</span>
+        </button>
         <button onclick="switchTab('tabSPED')" class="nav-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-indigo-300 hover:text-white flex items-center space-x-2 whitespace-nowrap">
           <i class="fa-solid fa-file-export"></i><span>Exportador SPED ECD</span>
         </button>
@@ -460,6 +463,106 @@
             </button>
           </div>
         </form>
+      </div>
+    </div>
+
+    <!-- ==================== ABA 7: DEMONSTRAÇÕES CONTÁBEIS (DRE E BALANÇO) ==================== -->
+    <div id="tabStatements" class="tab-content hidden space-y-6">
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div>
+          <h3 class="text-base font-bold text-slate-800 flex items-center space-x-2">
+            <i class="fa-solid fa-file-invoice text-indigo-600"></i>
+            <span>Demonstrações Contábeis Formais (Lei 6.404/76 e NBC TG 26)</span>
+          </h3>
+          <p class="text-xs text-slate-500">DRE e Balanço Patrimonial estruturados em tempo real para a empresa ativa</p>
+        </div>
+        <div class="flex items-center space-x-2">
+          <input type="date" id="statementStartDate" class="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-none" />
+          <span class="text-xs text-slate-400">até</span>
+          <input type="date" id="statementEndDate" class="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-none" />
+          <button onclick="loadFinancialStatements()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-1.5 rounded-lg text-xs transition flex items-center space-x-1.5 shadow-sm">
+            <i class="fa-solid fa-rotate"></i>
+            <span>Atualizar</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Demonstração do Resultado do Exercício (DRE) -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="px-5 py-3 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+            <h4 class="font-bold text-slate-800 text-sm flex items-center space-x-2">
+              <i class="fa-solid fa-chart-line text-emerald-600"></i>
+              <span>Demonstração do Resultado (DRE)</span>
+            </h4>
+            <span id="dreNetBadge" class="text-xs font-mono font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">R$ 0,00</span>
+          </div>
+          <div class="p-4 overflow-x-auto">
+            <table class="w-full text-xs font-mono">
+              <tbody id="dreTableBody" class="divide-y divide-slate-100">
+                <tr><td colspan="2" class="py-6 text-center text-slate-400">Carregando DRE...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Balanço Patrimonial Estruturado -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="px-5 py-3 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+            <h4 class="font-bold text-slate-800 text-sm flex items-center space-x-2">
+              <i class="fa-solid fa-scale-balanced text-indigo-600"></i>
+              <span>Balanço Patrimonial Estruturado</span>
+            </h4>
+            <span id="bsBalanceBadge" class="text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">EQUILIBRADO</span>
+          </div>
+          <div class="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono">
+            <!-- Ativo -->
+            <div class="border border-slate-200 rounded-lg p-3 bg-slate-50/50 space-y-2">
+              <div class="flex justify-between font-bold text-slate-800 border-b border-slate-200 pb-1">
+                <span>ATIVO TOTAL</span>
+                <span id="bsTotalAsset" class="text-indigo-900">R$ 0,00</span>
+              </div>
+              <div class="space-y-1 text-[11px]">
+                <div class="flex justify-between font-semibold text-slate-700">
+                  <span>1.1 Ativo Circulante:</span>
+                  <span id="bsCurrentAsset">R$ 0,00</span>
+                </div>
+                <div class="flex justify-between font-semibold text-slate-700">
+                  <span>1.2 Ativo Não Circulante:</span>
+                  <span id="bsNonCurrentAsset">R$ 0,00</span>
+                </div>
+              </div>
+              <div class="pt-2 border-t border-slate-200 text-[10px] text-slate-500 max-h-48 overflow-y-auto" id="bsAssetLines">
+                <!-- Linhas analíticas de ativo -->
+              </div>
+            </div>
+
+            <!-- Passivo e PL -->
+            <div class="border border-slate-200 rounded-lg p-3 bg-slate-50/50 space-y-2">
+              <div class="flex justify-between font-bold text-slate-800 border-b border-slate-200 pb-1">
+                <span>PASSIVO + PL TOTAL</span>
+                <span id="bsTotalLiabilityEquity" class="text-indigo-900">R$ 0,00</span>
+              </div>
+              <div class="space-y-1 text-[11px]">
+                <div class="flex justify-between font-semibold text-slate-700">
+                  <span>2.1 Passivo Circulante:</span>
+                  <span id="bsCurrentLiability">R$ 0,00</span>
+                </div>
+                <div class="flex justify-between font-semibold text-slate-700">
+                  <span>2.2 Passivo Não Circulante:</span>
+                  <span id="bsNonCurrentLiability">R$ 0,00</span>
+                </div>
+                <div class="flex justify-between font-semibold text-slate-700">
+                  <span>2.3 Patrimônio Líquido:</span>
+                  <span id="bsTotalEquity">R$ 0,00</span>
+                </div>
+              </div>
+              <div class="pt-2 border-t border-slate-200 text-[10px] text-slate-500 max-h-48 overflow-y-auto" id="bsLiabilityLines">
+                <!-- Linhas analíticas de passivo e PL -->
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 

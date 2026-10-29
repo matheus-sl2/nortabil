@@ -83,6 +83,43 @@ func (h *ReportHandler) GetTrialBalance(w http.ResponseWriter, r *http.Request) 
 	JSON(w, http.StatusOK, report)
 }
 
+// GetDRE gera a Demonstração do Resultado do Exercício
+func (h *ReportHandler) GetDRE(w http.ResponseWriter, r *http.Request) {
+	companyID := middleware.GetCompanyID(r)
+	startDate, endDate, err := parseDateRange(r)
+	if err != nil {
+		JSONError(w, http.StatusBadRequest, "INVALID_DATE_FORMAT", err.Error(), nil)
+		return
+	}
+
+	report, err := h.service.GetDRE(r.Context(), companyID, startDate, endDate)
+	if err != nil {
+		HandleDomainError(w, err)
+		return
+	}
+
+	JSON(w, http.StatusOK, report)
+}
+
+// GetBalanceSheet gera o Balanço Patrimonial Estruturado
+func (h *ReportHandler) GetBalanceSheet(w http.ResponseWriter, r *http.Request) {
+	companyID := middleware.GetCompanyID(r)
+	refDate := time.Now().UTC()
+	if dateParam := r.URL.Query().Get("date"); dateParam != "" {
+		if t, err := time.Parse("2006-01-02", dateParam); err == nil {
+			refDate = time.Date(t.Year(), t.Month(), t.Day(), 23, 59, 59, 0, time.UTC)
+		}
+	}
+
+	report, err := h.service.GetBalanceSheet(r.Context(), companyID, refDate)
+	if err != nil {
+		HandleDomainError(w, err)
+		return
+	}
+
+	JSON(w, http.StatusOK, report)
+}
+
 func parseDateRange(r *http.Request) (time.Time, time.Time, error) {
 	now := time.Now()
 	startDate := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)

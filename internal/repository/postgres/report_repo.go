@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -426,3 +427,284 @@ func (r *ReportRepository) GetTrialBalanceReport(ctx context.Context, companyID 
 
 	return report, nil
 }
+
+// GetDREReport gera a Demonstração do Resultado do Exercício conforme a Lei 6.404/76 e NBC TG 26
+func (r *ReportRepository) GetDREReport(ctx context.Context, companyID uuid.UUID, startDate, endDate time.Time) (*domain.DREReport, error) {
+	if companyID == uuid.Nil {
+		companyID = domain.DefaultCompanyID
+	}
+
+	allAccounts, err := r.accountRepo.List(ctx, companyID, false)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao carregar plano de contas para DRE: %w", err)
+	}
+
+	// Consulta o movimento do período para contas de Resultado (Receitas, Custos e Despesas)
+	query := `
+		SELECT 
+			jl.account_id,
+			COALESCE(SUM(CASE WHEN jl.type = 'DEBIT' THEN jl.amount ELSE 0 END), 0) AS debits,
+			COALESCE(SUM(CASE WHEN jl.type = 'CREDIT' THEN jl.amount ELSE 0 END), 0) AS credits
+		FROM journal_line jl
+		JOIN journal_entry je ON je.id = jl.journal_entry_id
+		JOIN account a ON a.id = jl.account_id
+		WHERE je.company_id = $1 AND je.status = 'POSTED' AND je.date >= $2 AND je.date <= $3
+		  AND (a.type IN ('REVENUE', 'EXPENSE') OR a.code LIKE '3%' OR a.code LIKE '4%' OR a.code LIKE '5%')
+		GROUP BY jl.account_id
+	`
+	rows, err := r.db.Pool.Query(ctx, query, companyID, startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao calcular somatórios para DRE: %w", err)
+	}
+	defer rows.Close()
+
+	type accBalance struct {
+		debits  decimal.Decimal
+		credits decimal.Decimal
+	}
+	balances := make(map[uuid.UUID]accBalance)
+	for rows.Next() {
+		var id uuid.UUID
+		var b accBalance
+		if err := rows.Scan(&id, &b.debits, &b.credits); err != nil {
+			return nil, fmt.Errorf("erro ao ler linha da DRE: %w", err)
+		}
+		balances[id] = b
+	}
+
+	dre := &domain.DREReport{
+		CompanyID:          companyID,
+		StartDate:          startDate,
+		EndDate:            endDate,
+		GeneratedAt:        time.Now(),
+		GrossRevenue:       decimal.Zero,
+		Deductions:         decimal.Zero,
+		CostOfGoodsSold:    decimal.Zero,
+		OperatingExpenses:  decimal.Zero,
+		FinancialRevenues:  decimal.Zero,
+		FinancialExpenses:  decimal.Zero,
+		IncomeTaxProvision: decimal.Zero,
+	}
+
+	// Agrega os saldos nas categorias da DRE
+	for _, acc := range allAccounts {
+		if acc.IsSynthetic {
+			continue
+		}
+		b, exists := balances[acc.ID]
+		if !exists {
+			continue
+		}
+
+		creditMinusDebit := b.credits.Sub(b.debits)
+		debitMinusCredit := b.debits.Sub(b.credits)
+
+		switch {
+		case strings.HasPrefix(acc.Code, "3.1") || (acc.Type == domain.AccountTypeRevenue && !strings.HasPrefix(acc.Code, "3.2") && !strings.HasPrefix(acc.Code, "3.3")):
+			// Receita Bruta
+			dre.GrossRevenue = dre.GrossRevenue.Add(creditMinusDebit)
+		case strings.HasPrefix(acc.Code, "3.2"):
+			// Deduções da Receita Bruta
+			dre.Deductions = dre.Deductions.Add(debitMinusCredit.Abs())
+		case strings.HasPrefix(acc.Code, "4.1"):
+			// Custos das Mercadorias / Serviços
+			dre.CostOfGoodsSold = dre.CostOfGoodsSold.Add(debitMinusCredit)
+		case strings.HasPrefix(acc.Code, "4.2"):
+			// Despesas Operacionais (Administrativas, Comerciais)
+			dre.OperatingExpenses = dre.OperatingExpenses.Add(debitMinusCredit)
+		case strings.HasPrefix(acc.Code, "4.3") || strings.HasPrefix(acc.Code, "3.3"):
+			// Financeiras
+			if debitMinusCredit.IsPositive() {
+				dre.FinancialExpenses = dre.FinancialExpenses.Add(debitMinusCredit)
+			} else {
+				dre.FinancialRevenues = dre.FinancialRevenues.Add(creditMinusDebit)
+			}
+		case strings.HasPrefix(acc.Code, "4.4"):
+			// Provisão IRPJ / CSLL
+			dre.IncomeTaxProvision = dre.IncomeTaxProvision.Add(debitMinusCredit)
+		default:
+			if acc.Type == domain.AccountTypeRevenue {
+				dre.GrossRevenue = dre.GrossRevenue.Add(creditMinusDebit)
+			} else if acc.Type == domain.AccountTypeExpense {
+				dre.OperatingExpenses = dre.OperatingExpenses.Add(debitMinusCredit)
+			}
+		}
+	}
+
+	// Cálculos dos subtotais e resultados
+	dre.NetRevenue = dre.GrossRevenue.Sub(dre.Deductions)
+	dre.GrossProfit = dre.NetRevenue.Sub(dre.CostOfGoodsSold)
+	dre.OperatingResult = dre.GrossProfit.Sub(dre.OperatingExpenses).Add(dre.FinancialRevenues).Sub(dre.FinancialExpenses)
+	dre.NetIncome = dre.OperatingResult.Sub(dre.IncomeTaxProvision)
+
+	// Linhas ordenadas da demonstração
+	dre.Lines = []domain.DRELine{
+		{Order: 1, Description: "RECEITA OPERACIONAL BRUTA", Amount: dre.GrossRevenue, IsTotal: false},
+		{Order: 2, Description: "(-) Deduções da Receita Bruta e Tributos sobre Vendas", Amount: dre.Deductions.Neg(), IsTotal: false},
+		{Order: 3, Description: "(=) RECEITA OPERACIONAL LÍQUIDA", Amount: dre.NetRevenue, IsTotal: true},
+		{Order: 4, Description: "(-) Custos dos Produtos e Serviços Vendidos (CMV/CSP)", Amount: dre.CostOfGoodsSold.Neg(), IsTotal: false},
+		{Order: 5, Description: "(=) LUCRO BRUTO", Amount: dre.GrossProfit, IsTotal: true},
+		{Order: 6, Description: "(-) Despesas Operacionais (Gerais, Administrativas e Vendas)", Amount: dre.OperatingExpenses.Neg(), IsTotal: false},
+		{Order: 7, Description: "(+) Receitas Financeiras", Amount: dre.FinancialRevenues, IsTotal: false},
+		{Order: 8, Description: "(-) Despesas Financeiras", Amount: dre.FinancialExpenses.Neg(), IsTotal: false},
+		{Order: 9, Description: "(=) RESULTADO OPERACIONAL ANTES DOS TRIBUTOS", Amount: dre.OperatingResult, IsTotal: true},
+		{Order: 10, Description: "(-) Provisão para IRPJ e CSLL", Amount: dre.IncomeTaxProvision.Neg(), IsTotal: false},
+		{Order: 11, Description: "(=) LUCRO OU PREJUÍZO LÍQUIDO DO EXERCÍCIO", Amount: dre.NetIncome, IsTotal: true},
+	}
+
+	return dre, nil
+}
+
+// GetBalanceSheetReport gera o Balanço Patrimonial Estruturado conforme a Lei 6.404/76 e NBC TG 26
+func (r *ReportRepository) GetBalanceSheetReport(ctx context.Context, companyID uuid.UUID, refDate time.Time) (*domain.BalanceSheetReport, error) {
+	if companyID == uuid.Nil {
+		companyID = domain.DefaultCompanyID
+	}
+
+	allAccounts, err := r.accountRepo.List(ctx, companyID, false)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao carregar plano de contas para Balanço Patrimonial: %w", err)
+	}
+
+	// Consulta o saldo acumulado de todas as contas até a data de referência
+	query := `
+		SELECT 
+			jl.account_id,
+			COALESCE(SUM(CASE WHEN jl.type = 'DEBIT' THEN jl.amount ELSE 0 END), 0) AS debits,
+			COALESCE(SUM(CASE WHEN jl.type = 'CREDIT' THEN jl.amount ELSE 0 END), 0) AS credits
+		FROM journal_line jl
+		JOIN journal_entry je ON je.id = jl.journal_entry_id
+		WHERE je.company_id = $1 AND je.status = 'POSTED' AND je.date <= $2
+		GROUP BY jl.account_id
+	`
+	rows, err := r.db.Pool.Query(ctx, query, companyID, refDate)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao consultar saldos acumulados do balanço: %w", err)
+	}
+	defer rows.Close()
+
+	type accBalance struct {
+		debits  decimal.Decimal
+		credits decimal.Decimal
+	}
+	balances := make(map[uuid.UUID]accBalance)
+	for rows.Next() {
+		var id uuid.UUID
+		var b accBalance
+		if err := rows.Scan(&id, &b.debits, &b.credits); err != nil {
+			return nil, fmt.Errorf("erro ao ler saldos do balanço: %w", err)
+		}
+		balances[id] = b
+	}
+
+	report := &domain.BalanceSheetReport{
+		CompanyID:           companyID,
+		ReferenceDate:       refDate,
+		GeneratedAt:         time.Now(),
+		CurrentAsset:        decimal.Zero,
+		NonCurrentAsset:     decimal.Zero,
+		TotalAsset:          decimal.Zero,
+		CurrentLiability:    decimal.Zero,
+		NonCurrentLiability: decimal.Zero,
+		TotalLiability:      decimal.Zero,
+		Equity:              decimal.Zero,
+		YearProfitLoss:      decimal.Zero,
+		TotalEquity:         decimal.Zero,
+		AssetLines:          []domain.BalanceSheetLine{},
+		LiabilityLines:      []domain.BalanceSheetLine{},
+	}
+
+	// Calcula resultado do exercício acumulado (se não encerrado ainda via ARE)
+	var totalRevenue, totalExpense decimal.Decimal
+	for _, acc := range allAccounts {
+		if acc.IsSynthetic {
+			continue
+		}
+		b, exists := balances[acc.ID]
+		if !exists {
+			continue
+		}
+
+		if acc.Type == domain.AccountTypeRevenue || strings.HasPrefix(acc.Code, "3") {
+			totalRevenue = totalRevenue.Add(b.credits.Sub(b.debits))
+		} else if acc.Type == domain.AccountTypeExpense || strings.HasPrefix(acc.Code, "4") || strings.HasPrefix(acc.Code, "5") {
+			totalExpense = totalExpense.Add(b.debits.Sub(b.credits))
+		}
+	}
+	report.YearProfitLoss = totalRevenue.Sub(totalExpense)
+
+	// Processa contas de Ativo (1) e Passivo/PL (2)
+	for _, acc := range allAccounts {
+		isAsset := strings.HasPrefix(acc.Code, "1")
+		isLiabilityOrEquity := strings.HasPrefix(acc.Code, "2")
+
+		if !isAsset && !isLiabilityOrEquity {
+			continue
+		}
+
+		var lineAmount decimal.Decimal
+		if acc.IsSynthetic {
+			prefix := acc.Code + "."
+			for _, sub := range allAccounts {
+				if !sub.IsSynthetic && (sub.Code == acc.Code || (len(sub.Code) > len(prefix) && sub.Code[:len(prefix)] == prefix)) {
+					if b, ok := balances[sub.ID]; ok {
+						if isAsset {
+							lineAmount = lineAmount.Add(b.debits.Sub(b.credits))
+						} else {
+							lineAmount = lineAmount.Add(b.credits.Sub(b.debits))
+						}
+					}
+				}
+			}
+		} else {
+			if b, ok := balances[acc.ID]; ok {
+				if isAsset {
+					lineAmount = b.debits.Sub(b.credits)
+				} else {
+					lineAmount = b.credits.Sub(b.debits)
+				}
+			}
+		}
+
+		line := domain.BalanceSheetLine{
+			AccountCode: acc.Code,
+			AccountName: acc.Name,
+			Level:       strings.Count(acc.Code, ".") + 1,
+			Amount:      lineAmount,
+			IsSynthetic: acc.IsSynthetic,
+		}
+
+		if isAsset {
+			report.AssetLines = append(report.AssetLines, line)
+			if !acc.IsSynthetic {
+				if strings.HasPrefix(acc.Code, "1.1") {
+					report.CurrentAsset = report.CurrentAsset.Add(lineAmount)
+				} else if strings.HasPrefix(acc.Code, "1.2") {
+					report.NonCurrentAsset = report.NonCurrentAsset.Add(lineAmount)
+				}
+			}
+		} else {
+			report.LiabilityLines = append(report.LiabilityLines, line)
+			if !acc.IsSynthetic {
+				if strings.HasPrefix(acc.Code, "2.1") {
+					report.CurrentLiability = report.CurrentLiability.Add(lineAmount)
+				} else if strings.HasPrefix(acc.Code, "2.2") {
+					report.NonCurrentLiability = report.NonCurrentLiability.Add(lineAmount)
+				} else if strings.HasPrefix(acc.Code, "2.3") || strings.HasPrefix(acc.Code, "2.4") {
+					report.Equity = report.Equity.Add(lineAmount)
+				}
+			}
+		}
+	}
+
+	report.TotalAsset = report.CurrentAsset.Add(report.NonCurrentAsset)
+	report.TotalLiability = report.CurrentLiability.Add(report.NonCurrentLiability)
+	report.TotalEquity = report.Equity.Add(report.YearProfitLoss)
+	report.TotalLiabilityAndEquity = report.TotalLiability.Add(report.TotalEquity)
+
+	// Verificação matemática da equação fundamental do balanço: Ativo == Passivo + PL
+	report.IsBalanced = report.TotalAsset.Equal(report.TotalLiabilityAndEquity)
+
+	return report, nil
+}
+

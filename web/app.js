@@ -9,6 +9,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   const dateInput = document.getElementById('entryDate');
   if (dateInput) dateInput.value = today;
 
+  const currentYear = new Date().getFullYear();
+  const startInput = document.getElementById('statementStartDate');
+  const endInput = document.getElementById('statementEndDate');
+  if (startInput) startInput.value = `${currentYear}-01-01`;
+  if (endInput) endInput.value = `${currentYear}-12-31`;
+
   await loadCompanies();
   if (currentCompanyId) {
     await initCompanyContext();
@@ -42,6 +48,7 @@ function switchTab(tabId) {
   if (tabId === 'tabJournal') loadJournalEntries();
   if (tabId === 'tabAccounts') renderAccountsTable();
   if (tabId === 'tabOFX') populateOFXSelects();
+  if (tabId === 'tabStatements') loadFinancialStatements();
 }
 
 function openModal(modalId) {
@@ -671,6 +678,110 @@ function handleExportSPED(e) {
   const url = `/api/v1/companies/${currentCompanyId}/export/sped-ecd?year=${year}&auditor_crc=${crc}&auditor_name=${auditorName}&auditor_cpf=${auditorCPF}&signatory_name=${signatoryName}&signatory_cpf=${signatoryCPF}`;
 
   window.open(url, '_blank');
+}
+
+// ==========================================
+// DEMONSTRAÇÕES CONTÁBEIS (DRE & BALANÇO)
+// ==========================================
+async function loadFinancialStatements() {
+  if (!currentCompanyId) return;
+
+  const startDate = document.getElementById('statementStartDate')?.value || `${new Date().getFullYear()}-01-01`;
+  const endDate = document.getElementById('statementEndDate')?.value || `${new Date().getFullYear()}-12-31`;
+
+  // 1. Carrega DRE
+  try {
+    const resDRE = await fetch(`/api/v1/companies/${currentCompanyId}/reports/dre?start_date=${startDate}&end_date=${endDate}`);
+    const jsonDRE = await resDRE.json();
+    if (jsonDRE.success) {
+      renderDRE(jsonDRE.data);
+    }
+  } catch (err) {
+    console.error('Erro ao carregar DRE:', err);
+  }
+
+  // 2. Carrega Balanço Patrimonial
+  try {
+    const resBS = await fetch(`/api/v1/companies/${currentCompanyId}/reports/balance-sheet?date=${endDate}`);
+    const jsonBS = await resBS.json();
+    if (jsonBS.success) {
+      renderBalanceSheet(jsonBS.data);
+    }
+  } catch (err) {
+    console.error('Erro ao carregar Balanço Patrimonial:', err);
+  }
+}
+
+function renderDRE(dre) {
+  const tbody = document.getElementById('dreTableBody');
+  const badge = document.getElementById('dreNetBadge');
+  if (!tbody) return;
+
+  const net = parseFloat(dre.net_income) || 0;
+  if (badge) {
+    badge.innerText = formatBRL(net);
+    badge.className = `text-xs font-mono font-bold px-2 py-0.5 rounded ${net >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`;
+  }
+
+  tbody.innerHTML = (dre.lines || []).map(line => {
+    const amt = parseFloat(line.amount) || 0;
+    const isTotal = line.is_total;
+    const rowClass = isTotal ? 'font-bold bg-slate-50 text-slate-900 border-t border-b border-slate-200' : 'text-slate-600 hover:bg-slate-50';
+    const amountColor = isTotal
+      ? (amt >= 0 ? 'text-emerald-700 font-bold' : 'text-rose-700 font-bold')
+      : 'text-slate-700';
+
+    return `
+      <tr class="${rowClass} transition">
+        <td class="py-2 px-3">${line.description}</td>
+        <td class="py-2 px-3 text-right ${amountColor}">${formatBRL(amt)}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function renderBalanceSheet(bs) {
+  document.getElementById('bsTotalAsset').innerText = formatBRL(bs.total_asset);
+  document.getElementById('bsCurrentAsset').innerText = formatBRL(bs.current_asset);
+  document.getElementById('bsNonCurrentAsset').innerText = formatBRL(bs.non_current_asset);
+
+  document.getElementById('bsTotalLiabilityEquity').innerText = formatBRL(bs.total_liability_and_equity);
+  document.getElementById('bsCurrentLiability').innerText = formatBRL(bs.current_liability);
+  document.getElementById('bsNonCurrentLiability').innerText = formatBRL(bs.non_current_liability);
+  document.getElementById('bsTotalEquity').innerText = formatBRL(bs.total_equity);
+
+  const badge = document.getElementById('bsBalanceBadge');
+  if (badge) {
+    if (bs.is_balanced) {
+      badge.className = 'text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800';
+      badge.innerText = 'EQUILIBRADO';
+    } else {
+      badge.className = 'text-[11px] font-bold px-2 py-0.5 rounded bg-rose-100 text-rose-800';
+      badge.innerText = 'DESEQUILIBRADO';
+    }
+  }
+
+  // Linhas analíticas do Ativo
+  const assetContainer = document.getElementById('bsAssetLines');
+  if (assetContainer) {
+    assetContainer.innerHTML = (bs.asset_lines || []).filter(l => !l.is_synthetic).map(l => `
+      <div class="flex justify-between py-0.5">
+        <span>${l.account_code} ${l.account_name}</span>
+        <span class="font-mono">${formatBRL(l.amount)}</span>
+      </div>
+    `).join('') || '<div class="text-slate-400">Nenhuma conta com saldo.</div>';
+  }
+
+  // Linhas analíticas do Passivo e PL
+  const liabilityContainer = document.getElementById('bsLiabilityLines');
+  if (liabilityContainer) {
+    liabilityContainer.innerHTML = (bs.liability_lines || []).filter(l => !l.is_synthetic).map(l => `
+      <div class="flex justify-between py-0.5">
+        <span>${l.account_code} ${l.account_name}</span>
+        <span class="font-mono">${formatBRL(l.amount)}</span>
+      </div>
+    `).join('') || '<div class="text-slate-400">Nenhuma conta com saldo.</div>';
+  }
 }
 
 // ==========================================
