@@ -1,0 +1,11 @@
+.git
+.gitignore
+.env
+.env.local
+bin/
+dist/
+*.exe
+*.test
+*.out
+coverage.html
+pgdata/

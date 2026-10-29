@@ -4,7 +4,7 @@
 # ==============================================================================
 
 # Estágio 1: Build da aplicação em Go
-FROM golang:1.22-alpine AS builder
+FROM golang:alpine AS builder
 
 WORKDIR /app
 
@@ -45,3 +45,4 @@ EXPOSE 8080
 
 # Comando de inicialização
 ENTRYPOINT ["/app/nortabil-api"]
+
