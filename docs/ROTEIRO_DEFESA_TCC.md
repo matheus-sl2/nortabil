@@ -51,8 +51,9 @@
   * Proibição categórica do uso de `float32` ou `float64` para valores financeiros. Prevenção de perda de centavos por representação binária aproximada.
 * **Isolamento Multi-Tenant Estrito:**
   * Cada empresa cliente (tenancy) possui seu próprio plano de contas e livros contábeis isolados, com validação matemática de dígitos verificadores de CNPJ.
-* **Concorrência e Locks Transacionais no PostgreSQL 16:**
-  * Numeração sequencial contínua de lançamentos contábeis (Diário Geral) sem furos ou saltos, usando bloqueio em nível de linha (`SELECT FOR UPDATE`).
+* **Dupla Barreira de Integridade no PostgreSQL 16:**
+  * Além da validação em memória, um *constraint trigger* diferido (`DEFERRABLE INITIALLY DEFERRED`) soma as partidas no momento do `COMMIT` e cancela a transação inteira (`ROLLBACK`) se débitos ≠ créditos ou se houver lançamento em conta sintética.
+  * Numeração dos lançamentos gerada por `SEQUENCE` do banco, segura sob concorrência (pode haver saltos de numeração após transações canceladas, comportamento padrão de sequences).
 
 ---
 
@@ -106,7 +107,7 @@ make seed
 ### Passo 3: Abrir a Interface Web Contábil
 Acesse no navegador:
 ```
-http://localhost:8080/dashboard
+http://localhost:8080/
 ```
 *Ações na tela:*
 * Mostrar o resumo patrimonial de Ativo, Passivo e Patrimônio Líquido.
@@ -114,16 +115,17 @@ http://localhost:8080/dashboard
 * Alternar entre o Balancete de Verificação, DRE e Balanço Estruturado.
 
 ### Passo 4: Demonstrar a Tentativa de Lançamento Desbalanceado (Rejeição por 1 Centavo)
-No terminal ou no Swagger (`http://localhost:8080/swagger/index.html`), envie uma tentativa de lançamento onde:
+No terminal ou no Swagger (`http://localhost:8080/swagger`), envie uma tentativa de lançamento onde:
 - Débito: R$ 100,00
 - Crédito: R$ 99,99
-*Resultado esperado:* Erro imediato HTTP 422: `"UNBALANCED_JOURNAL_ENTRY: Soma de débitos (100.00) diverge da soma de créditos (99.99)"`.
+*Resultado esperado:* Erro imediato HTTP 422 com código `UNBALANCED_ENTRY` e a mensagem: `"lançamento contábil desbalanceado: a soma dos débitos deve ser estritamente igual à soma dos créditos"`.
 *Explicação para a banca:* "O sistema recusa expressamente qualquer corrupção do balanço antes mesmo de abrir transação no banco de dados."
 
 ### Passo 5: Gerar o Arquivo do SPED ECD
 ```powershell
-curl.exe -s "http://localhost:8080/api/v1/sped/ecd?company_id=675d7cea-9d79-4214-98e1-aec328f6cc34&year=2026" -o sped_ecd_jaiba.txt
-head -n 20 sped_ecd_jaiba.txt
+# Substitua <ID_DA_EMPRESA> pelo ID exibido ao final do "make seed"
+curl.exe -s "http://localhost:8080/api/v1/companies/<ID_DA_EMPRESA>/export/sped-ecd?year=2026" -o sped_ecd_jaiba.txt
+Get-Content sped_ecd_jaiba.txt -TotalCount 20
 ```
 *Explicação para a banca:* "Arquivo textual no formato exigido pela Receita Federal com blocos de abertura, plano de contas I050, partidas I200/I250 e encerramento J930 devidamente assinado pelo contador responsável com CRC."
 
@@ -151,7 +153,8 @@ head -n 20 sped_ecd_jaiba.txt
 **"De que forma o sistema garante a conformidade com o SPED ECD e a rastreabilidade das operações?"**
 > **Resposta:**
 > A Escrituração Contábil Digital (IN RFB 2.003/2021) exige que cada registro contábil contenha histórico completo, data cronológica estrita, numeração contínua e associação a contas referenciais analíticas.
-> O Nortabil gera os blocos 0 (Identificação da PJ e do Escritório), I (Plano de Contas I050, Lançamento I200 e Partida I250), J (Termo de Encerramento e Signatários J930 com o CRC do contador responsável autenticado) e 9 (Totalizadores de integridade 9900/9999). Além disso, cada partida grava o usuário autenticado que a originou e seu carimbo de data/hora imutável.
+> O Nortabil gera os blocos 0 (Identificação da PJ e do Escritório), I (Plano de Contas I050, Lançamento I200 e Partida I250), J (Termo de Encerramento e Signatários J930 com o CRC do contador responsável) e 9 (Totalizadores de integridade 9900/9999). Cada lançamento recebe numeração sequencial contínua e carimbo de data/hora de criação.
+> *Limitação reconhecida (trabalho futuro):* a versão atual ainda não registra em cada lançamento o usuário autenticado que o originou (trilha de auditoria por usuário).
 
 ---
 
@@ -159,15 +162,16 @@ head -n 20 sped_ecd_jaiba.txt
 **"Como o sistema protege dados sensíveis dos clientes de contabilidade contra acessos indevidos?"**
 > **Resposta:**
 > O sistema implementa o modelo de Controle de Acesso Baseado em Funções (RBAC) com três perfis:
-> 1. `ADMIN`: Controle total da infraestrutura do escritório;
-> 2. `CONTADOR`: Acesso a lançamentos, apuração de resultados (ARE), fechamento de períodos e emissão de SPED ECD (exigindo CRC válido);
-> 3. `ASSISTENTE`: Operações de entrada de lançamentos e consulta a relatórios, impedido de alterar períodos já homologados pelo contador.
-> As senhas são hasheadas com Bcrypt (custo de processamento 10 resistente a ataques de dicionário e rainbow tables) e as requisições autenticadas via JSON Web Tokens (JWT) com assinatura HMAC-SHA256 e tempo de vida controlado.
+> 1. `ADMIN`: Controle total, incluindo o cadastro e a listagem de usuários (rotas `/auth/register` e `/auth/users` exigem token de ADMIN);
+> 2. `CONTADOR`: Perfil do responsável técnico, com registro de CRC;
+> 3. `ASSISTENTE`: Perfil operacional de entrada de lançamentos e consulta.
+> As senhas são hasheadas com Bcrypt (custo 10, resistente a ataques de dicionário e rainbow tables) e as requisições autenticadas via JSON Web Tokens (JWT) com assinatura HMAC-SHA256 e tempo de vida de 24 horas.
+> *Limitação reconhecida (trabalho futuro):* a hierarquia de perfis está implementada e testada (`HasPermission` / `RequireRole`), mas, nesta versão, apenas a gestão de usuários é bloqueada por perfil. Exigir login nas rotas de fechamento de período e SPED depende de adicionar uma tela de login ao dashboard.
 
 ---
 
 ### Pergunta 5 (Área Regional):
-**"Qual foi o impacto real observado para o contexto específico do Norte de Minas Gerais?"**
+**"Qual é o impacto esperado para o contexto específico do Norte de Minas Gerais?"**
 > **Resposta:**
-> No Norte de Minas, a sazonalidade da colheita no agronegócio de Jaíba e a logística de atacado em Montes Claros geram picos concentrados de movimentações bancárias e de notas fiscais ao final de cada mês. Os escritórios tradicionais gastavam dias para conciliar extratos e fechar períodos.
-> Com o Nortabil, a importação OFX automatizada e a vazão de mais de 1 milhão de lançamentos por segundo sob concorrência reduzem o tempo de fechamento mensal de dias para minutos, eliminando retrabalho de digitação manual e garantindo 100% de conformidade fiscal para empresas do Simples, Lucro Presumido e Lucro Real da nossa região.
+> No Norte de Minas, a sazonalidade da colheita no agronegócio de Jaíba e a logística de atacado em Montes Claros geram picos concentrados de movimentações bancárias e de notas fiscais ao final de cada mês.
+> Os resultados de benchmarking mostram que o gargalo deixa de ser o motor contábil (mais de 1 milhão de validações por segundo sob concorrência), e a importação OFX elimina a digitação manual de extratos. A expectativa é reduzir significativamente o tempo de fechamento mensal; a medição desse ganho em um escritório real da região fica como validação de campo para trabalhos futuros.
