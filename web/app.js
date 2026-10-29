@@ -246,6 +246,7 @@ function switchTab(tabId) {
   }
   if (tabId === 'tabAccounts') renderAccountsTable();
   if (tabId === 'tabOFX') populateOFXSelects();
+  if (tabId === 'tabNFe') populateNFeSelects();
   if (tabId === 'tabStatements') loadFinancialStatements();
 }
 
@@ -939,6 +940,175 @@ async function loadReconciliationItems() {
     `).join('');
   } catch (err) {
     console.error('Erro ao listar reconciliação:', err);
+  }
+}
+
+// ==========================================
+// IMPORTADOR AUTOMÁTICO DE NF-e (XML SEFAZ)
+// ==========================================
+function populateNFeSelects() {
+  const analyticalAccounts = cachedAccounts.filter(a => !a.is_synthetic);
+  const debSel = document.getElementById('nfeDebitAccount');
+  const credSel = document.getElementById('nfeCreditAccount');
+  if (!debSel || !credSel) return;
+
+  const options = '<option value="">Classificação Contábil Automática (Padrão)</option>' +
+    analyticalAccounts.map(a => `<option value="${a.id}">${a.code} - ${a.name}</option>`).join('');
+  debSel.innerHTML = options;
+  credSel.innerHTML = options;
+}
+
+function fillSampleNFeXML(type) {
+  const textarea = document.getElementById('nfeXmlContent');
+  if (!textarea) return;
+
+  const today = new Date().toISOString().split('T')[0];
+
+  if (type === 'ENTRADA') {
+    textarea.value = `<?xml version="1.0" encoding="UTF-8"?>
+<nfeProc versao="4.00" xmlns="http://www.portalfiscal.inf.br/nfe">
+  <NFe>
+    <infNFe Id="NFe31260211222333000181550010000894121000894125" versao="4.00">
+      <ide>
+        <cUF>31</cUF>
+        <natOp>Compra de Insumos Agricolas e Embalagens</natOp>
+        <mod>55</mod>
+        <serie>1</serie>
+        <nNF>89412</nNF>
+        <dhEmi>${today}T09:30:00-03:00</dhEmi>
+        <tpNF>0</tpNF>
+      </ide>
+      <emit>
+        <CNPJ>11222333000181</CNPJ>
+        <xNome>AGROINSUMOS NORTE DE MINAS LTDA - JANUARIA MG</xNome>
+      </emit>
+      <dest>
+        <CNPJ>19131243000197</CNPJ>
+        <xNome>FRUTICULTURA VALE DO JAIBA LTDA</xNome>
+      </dest>
+      <det nItem="1">
+        <prod>
+          <cProd>INS-001</cProd>
+          <xProd>Fertilizante NPK Organomineral e Caixas Plasticas para Colheita</xProd>
+          <CFOP>1101</CFOP>
+          <vProd>8450.00</vProd>
+        </prod>
+      </det>
+      <total>
+        <ICMSTot>
+          <vProd>8450.00</vProd>
+          <vICMS>1014.00</vICMS>
+          <vDesc>0.00</vDesc>
+          <vNF>8450.00</vNF>
+        </ICMSTot>
+      </total>
+    </infNFe>
+  </NFe>
+  <protNFe versao="4.00">
+    <infProt>
+      <chNFe>31260211222333000181550010000894121000894125</chNFe>
+    </infProt>
+  </protNFe>
+</nfeProc>`;
+  } else {
+    textarea.value = `<?xml version="1.0" encoding="UTF-8"?>
+<nfeProc versao="4.00" xmlns="http://www.portalfiscal.inf.br/nfe">
+  <NFe>
+    <infNFe Id="NFe31260219131243000197550010001254801001254809" versao="4.00">
+      <ide>
+        <cUF>31</cUF>
+        <natOp>Venda de Producao do Estabelecimento</natOp>
+        <mod>55</mod>
+        <serie>1</serie>
+        <nNF>125480</nNF>
+        <dhEmi>${today}T14:15:00-03:00</dhEmi>
+        <tpNF>1</tpNF>
+      </ide>
+      <emit>
+        <CNPJ>19131243000197</CNPJ>
+        <xNome>FRUTICULTURA VALE DO JAIBA LTDA</xNome>
+      </emit>
+      <dest>
+        <CNPJ>60701190000104</CNPJ>
+        <xNome>DISTRIBUIDORA COMERCIAL MONTES CLAROS LTDA</xNome>
+      </dest>
+      <det nItem="1">
+        <prod>
+          <cProd>FRU-101</cProd>
+          <xProd>Banana Prata Selecionada Exportacao e Manga Palmer (Lote Irrigado Jaiba)</xProd>
+          <CFOP>5101</CFOP>
+          <vProd>22500.00</vProd>
+        </prod>
+      </det>
+      <total>
+        <ICMSTot>
+          <vProd>22500.00</vProd>
+          <vICMS>2700.00</vICMS>
+          <vDesc>0.00</vDesc>
+          <vNF>22500.00</vNF>
+        </ICMSTot>
+      </total>
+    </infNFe>
+  </NFe>
+  <protNFe versao="4.00">
+    <infProt>
+      <chNFe>31260219131243000197550010001254801001254809</chNFe>
+    </infProt>
+  </protNFe>
+</nfeProc>`;
+  }
+}
+
+async function handleImportNFeXML(e) {
+  e.preventDefault();
+  if (!currentCompanyId) return;
+
+  const xmlContent = document.getElementById('nfeXmlContent').value.trim();
+  const debitAccountId = document.getElementById('nfeDebitAccount')?.value || '';
+  const creditAccountId = document.getElementById('nfeCreditAccount')?.value || '';
+
+  try {
+    const res = await fetch(`/api/v1/companies/${currentCompanyId}/nfe/import-xml`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        xml_content: xmlContent,
+        debit_account_id: debitAccountId,
+        credit_account_id: creditAccountId
+      })
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json.error?.message || json.message || 'Falha ao processar XML da NF-e');
+    }
+
+    const r = json.data;
+    const doc = r.document;
+    const je = r.journal_entry;
+    const box = document.getElementById('nfeResultBox');
+    if (box) {
+      box.classList.remove('hidden');
+      box.innerHTML = `
+        <div class="flex justify-between items-center border-b border-emerald-200 pb-2">
+          <span class="font-bold text-emerald-900 text-sm"><i class="fa-solid fa-circle-check mr-1"></i>NF-e nº ${doc.number} (Série ${doc.series}) Contabilizada com Sucesso!</span>
+          <span class="font-mono font-bold px-2.5 py-0.5 rounded bg-emerald-200 text-emerald-900">${r.direction === 'ENTRADA_COMPRA' ? 'ENTRADA / COMPRA' : 'SAÍDA / FATURAMENTO'}</span>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 font-mono text-slate-700 pt-1">
+          <div><b>Chave SEFAZ:</b> ${doc.access_key || '-'}</div>
+          <div><b>Natureza:</b> ${doc.operation_nature}</div>
+          <div><b>Emitente:</b> ${doc.emitter_name} (${doc.emitter_cnpj})</div>
+          <div><b>Destinatário:</b> ${doc.recipient_name} (${doc.recipient_cnpj})</div>
+          <div><b>Valor Total (vNF):</b> <span class="font-bold text-emerald-800">${formatBRL(doc.total_invoice)}</span></div>
+          <div><b>Lançamento Diário:</b> <span class="font-bold text-indigo-800">#${je.entry_number} (${je.created_by || 'Sistema'})</span></div>
+        </div>
+      `;
+    }
+
+    showAlert(`NF-e nº ${doc.number} importada! Lançamento #${je.entry_number} (${formatBRL(doc.total_invoice)}) registrado no Livro Diário.`);
+    await loadJournalEntries();
+    await loadDashboard();
+  } catch (err) {
+    showAlert('Erro ao importar XML de NF-e: ' + err.message, 'error');
   }
 }
 

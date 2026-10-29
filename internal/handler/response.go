@@ -72,7 +72,8 @@ func HandleDomainError(w http.ResponseWriter, err error) {
 		errors.Is(err, domain.ErrInvalidCNPJ),
 		errors.Is(err, domain.ErrInvalidTaxRegime),
 		errors.Is(err, domain.ErrParentAccountMustBeSynthetic),
-		errors.Is(err, domain.ErrAccountHasEntriesCannotBeSynthetic):
+		errors.Is(err, domain.ErrAccountHasEntriesCannotBeSynthetic),
+		errors.Is(err, domain.ErrInvalidNFeXML):
 		JSONError(w, http.StatusBadRequest, "BAD_REQUEST", err.Error(), nil)
 	default:
 		JSONError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Ocorreu um erro interno no servidor contábil: "+err.Error(), nil)

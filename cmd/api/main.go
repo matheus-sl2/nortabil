@@ -51,6 +51,7 @@ func main() {
 	var reportHandler *handler.ReportHandler
 	var periodHandler *handler.PeriodHandler
 	var reconciliationHandler *handler.ReconciliationHandler
+	var nfeHandler *handler.NFeHandler
 	var spedHandler *handler.SPEDHandler
 	var exportHandler *handler.ExportHandler
 	var authHandler *handler.AuthHandler
@@ -71,6 +72,7 @@ func main() {
 		reportService := service.NewReportService(reportRepo)
 		periodService := service.NewPeriodService(periodRepo, journalRepo, accountRepo)
 		ofxService := service.NewOFXService(reconciliationRepo, journalService, accountRepo)
+		nfeService := service.NewNFeService(companyRepo, accountRepo, journalService)
 		spedService := service.NewSPEDService(companyRepo, accountRepo, journalRepo)
 		exportService := service.NewExportService(companyRepo, reportRepo)
 		authService = service.NewAuthService(userRepo, cfg.JWTSecret)
@@ -81,13 +83,14 @@ func main() {
 		reportHandler = handler.NewReportHandler(reportService)
 		periodHandler = handler.NewPeriodHandler(periodService)
 		reconciliationHandler = handler.NewReconciliationHandler(ofxService)
+		nfeHandler = handler.NewNFeHandler(nfeService)
 		spedHandler = handler.NewSPEDHandler(spedService)
 		exportHandler = handler.NewExportHandler(exportService)
 		authHandler = handler.NewAuthHandler(authService)
 	}
 
 	// 4. Configuração das Rotas e Servidor HTTP
-	router := handler.SetupRouter(db, companyHandler, accountHandler, journalHandler, reportHandler, periodHandler, reconciliationHandler, spedHandler, exportHandler, authHandler, authService, docs.SwaggerYAML)
+	router := handler.SetupRouter(db, companyHandler, accountHandler, journalHandler, reportHandler, periodHandler, reconciliationHandler, nfeHandler, spedHandler, exportHandler, authHandler, authService, docs.SwaggerYAML)
 
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%s", cfg.Port),

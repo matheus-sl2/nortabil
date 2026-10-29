@@ -25,6 +25,7 @@ func SetupRouter(
 	reportHandler *ReportHandler,
 	periodHandler *PeriodHandler,
 	reconciliationHandler *ReconciliationHandler,
+	nfeHandler *NFeHandler,
 	spedHandler *SPEDHandler,
 	exportHandler *ExportHandler,
 	authHandler *AuthHandler,
@@ -178,6 +179,12 @@ func SetupRouter(
 					rec.Get("/items", reconciliationHandler.ListItems)
 				})
 
+				if nfeHandler != nil {
+					sub.Route("/nfe", func(nfe chi.Router) {
+						nfe.Post("/import-xml", nfeHandler.ImportXML)
+					})
+				}
+
 				sub.Get("/export/sped-ecd", spedHandler.ExportECD)
 			})
 		})
@@ -222,6 +229,12 @@ func SetupRouter(
 				rec.Post("/import-ofx", reconciliationHandler.ImportOFX)
 				rec.Get("/items", reconciliationHandler.ListItems)
 			})
+
+			if nfeHandler != nil {
+				tenantGroup.Route("/nfe", func(nfe chi.Router) {
+					nfe.Post("/import-xml", nfeHandler.ImportXML)
+				})
+			}
 
 			tenantGroup.Get("/export/sped-ecd", spedHandler.ExportECD)
 		})

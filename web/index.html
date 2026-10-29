@@ -73,6 +73,9 @@
         <button onclick="switchTab('tabOFX')" class="nav-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-indigo-300 hover:text-white flex items-center space-x-2 whitespace-nowrap">
           <i class="fa-solid fa-file-invoice-dollar"></i><span>Conciliação OFX</span>
         </button>
+        <button onclick="switchTab('tabNFe')" class="nav-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-indigo-300 hover:text-white flex items-center space-x-2 whitespace-nowrap">
+          <i class="fa-solid fa-file-code"></i><span>Importador NF-e (XML)</span>
+        </button>
         <button onclick="switchTab('tabPeriods')" class="nav-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-indigo-300 hover:text-white flex items-center space-x-2 whitespace-nowrap">
           <i class="fa-solid fa-calendar-check"></i><span>Períodos & ARE</span>
         </button>
@@ -397,6 +400,64 @@
               <tr><td colspan="6" class="px-4 py-8 text-center text-slate-400">Selecione uma conta bancária para ver as transações.</td></tr>
             </tbody>
           </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== ABA 4.5: IMPORTADOR FISCAL DE NF-e (XML SEFAZ MODELO 55) ==================== -->
+    <div id="tabNFe" class="tab-content hidden space-y-6">
+      <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-200 pb-4 mb-5">
+          <div>
+            <h3 class="text-base font-bold text-slate-800 flex items-center space-x-2">
+              <i class="fa-solid fa-file-code text-indigo-600"></i>
+              <span>Importador Automático de Nota Fiscal Eletrônica (XML NF-e SEFAZ Modelo 55)</span>
+            </h3>
+            <p class="text-xs text-slate-500">Lê o XML autorizado da SEFAZ (<code class="font-mono bg-slate-100 px-1 rounded">&lt;nfeProc&gt;</code>), classifica Entrada (Compra) ou Saída (Venda) e contabiliza automaticamente no Livro Diário</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" onclick="fillSampleNFeXML('SAIDA')" class="text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-lg font-semibold transition flex items-center space-x-1.5">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              <span>Exemplo XML Venda (Saída)</span>
+            </button>
+            <button type="button" onclick="fillSampleNFeXML('ENTRADA')" class="text-xs bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 px-3 py-1.5 rounded-lg font-semibold transition flex items-center space-x-1.5">
+              <i class="fa-solid fa-truck-ramp-box"></i>
+              <span>Exemplo XML Compra (Entrada)</span>
+            </button>
+          </div>
+        </div>
+
+        <form onsubmit="handleImportNFeXML(event)" class="space-y-4">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Conta Analítica de Débito (Opcional - Automático pelo CFOP/Tipo)</label>
+              <select id="nfeDebitAccount" class="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <option value="">Classificação Contábil Automática (Padrão)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Conta Analítica de Crédito (Opcional - Automático pelo CFOP/Tipo)</label>
+              <select id="nfeCreditAccount" class="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <option value="">Classificação Contábil Automática (Padrão)</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Conteúdo XML da NF-e (Cole o XML abaixo ou clique nos botões de exemplo acima)</label>
+            <textarea id="nfeXmlContent" rows="8" required placeholder="Cole aqui o conteúdo do arquivo XML da NF-e (<nfeProc> ou <NFe>)..." class="w-full text-xs font-mono border border-slate-300 rounded-lg p-3 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+          </div>
+
+          <div class="flex justify-end">
+            <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-5 py-2.5 rounded-lg text-sm shadow-md transition flex items-center space-x-2">
+              <i class="fa-solid fa-bolt"></i>
+              <span>Importar XML e Contabilizar Partidas Dobradas</span>
+            </button>
+          </div>
+        </form>
+
+        <div id="nfeResultBox" class="hidden mt-6 p-4 rounded-xl border border-emerald-200 bg-emerald-50/60 text-xs space-y-2">
+          <!-- Resumo da NF-e contabilizada -->
         </div>
       </div>
     </div>
