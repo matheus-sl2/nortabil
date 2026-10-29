@@ -58,11 +58,11 @@
 ---
 
 ### Slide 5: Funcionalidades Desenvolvidas (Minutos 09 - 13)
-1. **Motor de Partidas Dobradas:** Validação atômica e simultânea em memória antes de qualquer escrita no banco de dados.
-2. **Importador de Extratos Bancários OFX (SGML/XML):** Leitura de extratos bancários com prevenção automática de duplicidade via hash/código `FITID` e sugestão de contrapartida.
+1. **Motor de Partidas Dobradas & Estorno Oficial (NBC ITG 2000):** Validação atômica em memória e no PostgreSQL, além de retificação imutável por partida inversa (`REVERSED`).
+2. **Importador de Extratos Bancários OFX e Importador de XML de NF-e (SEFAZ Modelo 55):** Leitura automatizada de extratos bancários (com prevenção de duplicidade `FITID`) e de Notas Fiscais Eletrônicas (`<nfeProc>`), classificando Entrada (Compra) ou Saída (Venda) e gerando as partidas dobradas.
 3. **Controle de Períodos Fiscais & Apuração do Exercício (ARE):** Travamento de meses encerrados (bloqueio de lançamentos retroativos) e zeramento automático de contas de receita/despesa com transferência de lucro/prejuízo ao PL.
-4. **Gerador Oficial do SPED ECD:** Emissão em conformidade com o Manual de Orientação do Leiaute 9.
-5. **DRE, Balanço Patrimonial Estruturado e Exportação CSV com BOM UTF-8:** Demonstrações prontas para assinatura do contador e exportação compatível com Excel.
+4. **Gerador Oficial do SPED ECD com Pré-Validador PVA Interno:** Emissão dos Blocos 0, I, J e 9 e auditoria interna dos registros `I200`/`I250` e `9999`.
+5. **Tríade de Demonstrações Contábeis (Balanço Patrimonial + DRE + DFC Método Direto) e Painel de Indicadores:** Demonstrações conforme Lei 6.404/76, NBC TG 26 e NBC TG 03, acompanhadas de índices de Liquidez, Endividamento, Margens, ROA e ROE, além do Livro Razão Analítico interativo e impressão A4/PDF.
 6. **Autenticação Segura com JWT, Bcrypt e Controle de Acesso Baseado em Funções (RBAC):** Hierarquia de acessos para `ADMIN`, `CONTADOR` (com registro de CRC) e `ASSISTENTE`.
 
 ---

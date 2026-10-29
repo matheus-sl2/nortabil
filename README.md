@@ -106,20 +106,29 @@ A documentação interativa completa (Swagger UI) está disponível em `http://l
 | `GET` | `/api/v1/accounts/{id}` | Busca conta contábil pelo UUID |
 | `GET` | `/api/v1/accounts/code/{code}` | Busca conta pelo código estruturado (ex: `1.1.01.001`) |
 
-### 4.2 Lançamentos Contábeis (Partidas Dobradas)
+### 4.2 Lançamentos Contábeis, Estornos e Automação Fiscal (NF-e / OFX)
 | Método | Rota | Descrição |
 |---|---|---|
 | `POST` | `/api/v1/journal-entries` | Registra lançamento contábil individual com validação de Luca Pacioli |
 | `POST` | `/api/v1/journal-entries/batch` | Ingestão em lote de alta performance com worker pool concorrente |
+| `POST` | `/api/v1/journal-entries/{id}/reverse` | **Estorno Contábil (NBC ITG 2000):** Gera lançamento de partida inversa transacional (ACID) |
+| `POST` | `/api/v1/nfe/import-xml` | **Importador XML NF-e (SEFAZ Mod. 55):** Classifica Entrada/Saída e contabiliza automaticamente |
+| `POST` | `/api/v1/reconciliation/import-ofx` | **Conciliação Bancária OFX:** Importa extratos SGML/XML com trava anti-duplicidade `FITID` |
 | `GET` | `/api/v1/journal-entries` | Lista lançamentos paginados com filtros por período e status |
 | `GET` | `/api/v1/journal-entries/{id}` | Retorna detalhes completos do lançamento com suas partidas |
 
-### 4.3 Relatórios e Livros Legais (Além do Mínimo Viável)
+### 4.3 Demonstrações Contábeis, Indicadores e SPED ECD
 | Método | Rota | Descrição |
 |---|---|---|
-| `GET` | `/api/v1/reports/ledger` | **Livro Razão:** Emite o razão analítico com saldos anteriores e movimentações |
+| `GET` | `/api/v1/reports/ledger` | **Livro Razão Analítico:** Emite o razão por conta com *Running Balance* linha a linha |
 | `GET` | `/api/v1/reports/journal` | **Livro Diário Geral:** Relação cronológica oficial de todos os lançamentos |
 | `GET` | `/api/v1/reports/trial-balance` | **Balancete de Verificação:** Balancete hierárquico com conferência de débitos/créditos |
+| `GET` | `/api/v1/reports/dre` | **DRE (Lei 6.404/76):** Demonstração do Resultado do Exercício estruturada |
+| `GET` | `/api/v1/reports/balance-sheet` | **Balanço Patrimonial (NBC TG 26):** Ativo, Passivo e Patrimônio Líquido |
+| `GET` | `/api/v1/reports/dfc` | **DFC (NBC TG 03 / CPC 03):** Demonstração dos Fluxos de Caixa pelo Método Direto |
+| `GET` | `/api/v1/reports/indicators` | **Análise de Balanços:** Liquidez, Endividamento, Margens, ROA e ROE |
+| `GET` | `/api/v1/export/sped-ecd` | **Exportador SPED ECD:** Geração dos Blocos 0, I, J e 9 (Leiaute 9 RFB) |
+| `GET` | `/api/v1/export/sped-ecd/validate` | **Pré-Validador PVA:** Auditoria estrutural e matemática dos registros `I200`/`I250` e `9999` |
 
 ### 4.4 Operação e Monitoramento
 | Método | Rota | Descrição |

@@ -633,7 +633,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [trial-balance, dre, balance-sheet]
+            enum: [trial-balance, ledger, dre, dfc, balance-sheet]
         - name: start_date
           in: query
           schema:
@@ -651,6 +651,117 @@ paths:
             text/html:
               schema:
                 type: string
+
+  /api/v1/reports/dfc:
+    get:
+      summary: Demonstração dos Fluxos de Caixa (DFC - Método Direto NBC TG 03)
+      description: Emite a DFC segregando os fluxos de Caixa e Equivalentes (1.1.01) em Atividades Operacionais, de Investimento e de Financiamento.
+      tags:
+        - Relatórios Legais
+      parameters:
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: DFC gerada e conciliada com o saldo de disponibilidades
+
+  /api/v1/reports/indicators:
+    get:
+      summary: Painel de Indicadores Econômico-Financeiros (Análise de Balanços)
+      description: Calcula em ponto fixo decimal os índices de Liquidez (Corrente, Imediata, Geral), Endividamento, Margens (Bruta, Operacional, Líquida), ROA e ROE.
+      tags:
+        - Relatórios Legais
+      parameters:
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Indicadores econômico-financeiros calculados
+
+  /api/v1/journal-entries/{id}/reverse:
+    post:
+      summary: Estorno Contábil Oficial (Partida Inversa - NBC ITG 2000)
+      description: Executa a retificação de lançamento contábil por partida inversa transacional (ACID), mantendo o lançamento original marcado como REVERSED e inserindo novo lançamento espelhado.
+      tags:
+        - Lançamentos Contábeis
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  example: "Retificação de valor conforme nota complementar"
+      responses:
+        '201':
+          description: Lançamento de estorno registrado com sucesso
+
+  /api/v1/nfe/import-xml:
+    post:
+      summary: Importar XML de Nota Fiscal Eletrônica (SEFAZ Modelo 55)
+      description: Analisa o XML autorizado da SEFAZ (<nfeProc> ou <NFe>), identifica automaticamente Entrada (Compra) ou Saída (Venda) e registra o lançamento em partidas dobradas no Livro Diário.
+      tags:
+        - Importação Fiscal NF-e
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [xml_content]
+              properties:
+                xml_content:
+                  type: string
+                debit_account_id:
+                  type: string
+                  format: uuid
+                credit_account_id:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: NF-e importada e contabilizada no Livro Diário
+
+  /api/v1/export/sped-ecd/validate:
+    get:
+      summary: Pré-Validador PVA Interno do SPED ECD
+      description: Audita a estrutura dos Blocos 0, I, J e 9, confere a igualdade matemática das partidas I250 e valida o totalizador de linhas 9999 antes da transmissão ao PVA da Receita Federal.
+      tags:
+        - SPED ECD
+      parameters:
+        - name: year
+          in: query
+          schema:
+            type: integer
+            example: 2026
+      responses:
+        '200':
+          description: Laudo técnico de validação do arquivo SPED ECD
 
   /api/v1/periods:
     get:
