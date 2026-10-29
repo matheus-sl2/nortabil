@@ -64,5 +64,20 @@ var (
 
 	// ErrMismatchedCompanyTenant ocorre quando há tentativa de misturar contas ou lançamentos de empresas diferentes.
 	ErrMismatchedCompanyTenant = errors.New("violação de isolamento multi-tenant: contas pertencem a empresas distintas")
+
+	// ErrPeriodClosed ocorre quando tenta-se lançar em período mensal já encerrado.
+	ErrPeriodClosed = errors.New("período contábil fechado: não são permitidos lançamentos retroativos em períodos já encerrados")
+
+	// ErrPeriodLocked ocorre quando tenta-se reabrir um período já auditado e travado.
+	ErrPeriodLocked = errors.New("período contábil travado (LOCKED): períodos auditados não podem ser alterados")
+
+	// ErrPeriodNotFound ocorre quando o período solicitado não existe.
+	ErrPeriodNotFound = errors.New("período contábil não localizado")
+
+	// ErrPeriodAlreadyOpen ocorre quando tenta-se abrir um período que já está aberto.
+	ErrPeriodAlreadyOpen = errors.New("o período contábil informado já está aberto")
+
+	// ErrResultAccountNotFound ocorre quando a conta de Lucros ou Prejuízos Acumulados não foi localizada no ARE.
+	ErrResultAccountNotFound = errors.New("conta de destinação do resultado (Lucros/Prejuízos Acumulados) não encontrada")
 )
 

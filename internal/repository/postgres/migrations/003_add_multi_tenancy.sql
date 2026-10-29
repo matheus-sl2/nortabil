@@ -43,6 +43,7 @@ BEGIN
         ALTER TABLE account ADD COLUMN company_id UUID REFERENCES company(id) ON DELETE CASCADE;
         UPDATE account SET company_id = '00000000-0000-0000-0000-000000000001' WHERE company_id IS NULL;
         ALTER TABLE account ALTER COLUMN company_id SET NOT NULL;
+        ALTER TABLE account ALTER COLUMN company_id SET DEFAULT '00000000-0000-0000-0000-000000000001';
 
         -- Remove chave única antiga apenas por código e cria chave única composta (company_id, code)
         ALTER TABLE account DROP CONSTRAINT IF EXISTS account_code_key;
@@ -61,6 +62,7 @@ BEGIN
         ALTER TABLE journal_entry ADD COLUMN company_id UUID REFERENCES company(id) ON DELETE CASCADE;
         UPDATE journal_entry SET company_id = '00000000-0000-0000-0000-000000000001' WHERE company_id IS NULL;
         ALTER TABLE journal_entry ALTER COLUMN company_id SET NOT NULL;
+        ALTER TABLE journal_entry ALTER COLUMN company_id SET DEFAULT '00000000-0000-0000-0000-000000000001';
 
         CREATE INDEX IF NOT EXISTS idx_journal_entry_company_id ON journal_entry(company_id);
         CREATE INDEX IF NOT EXISTS idx_journal_entry_company_date ON journal_entry(company_id, date);

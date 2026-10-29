@@ -53,10 +53,14 @@ func HandleDomainError(w http.ResponseWriter, err error) {
 		JSONError(w, http.StatusUnprocessableEntity, "UNBALANCED_ENTRY", err.Error(), nil)
 	case errors.Is(err, domain.ErrSyntheticAccountPostNotAllowed):
 		JSONError(w, http.StatusUnprocessableEntity, "SYNTHETIC_ACCOUNT_NOT_ALLOWED", err.Error(), nil)
-	case errors.Is(err, domain.ErrAccountNotFound), errors.Is(err, domain.ErrParentAccountNotFound), errors.Is(err, domain.ErrCompanyNotFound):
+	case errors.Is(err, domain.ErrAccountNotFound), errors.Is(err, domain.ErrParentAccountNotFound), errors.Is(err, domain.ErrCompanyNotFound), errors.Is(err, domain.ErrPeriodNotFound), errors.Is(err, domain.ErrResultAccountNotFound):
 		JSONError(w, http.StatusNotFound, "NOT_FOUND", err.Error(), nil)
 	case errors.Is(err, domain.ErrAccountAlreadyExists), errors.Is(err, domain.ErrCompanyAlreadyExists):
 		JSONError(w, http.StatusConflict, "ALREADY_EXISTS", err.Error(), nil)
+	case errors.Is(err, domain.ErrPeriodClosed), errors.Is(err, domain.ErrPeriodLocked):
+		JSONError(w, http.StatusForbidden, "PERIOD_CLOSED", err.Error(), nil)
+	case errors.Is(err, domain.ErrPeriodAlreadyOpen):
+		JSONError(w, http.StatusBadRequest, "PERIOD_ALREADY_OPEN", err.Error(), nil)
 	case errors.Is(err, domain.ErrEmptyJournalLines),
 		errors.Is(err, domain.ErrZeroOrNegativeAmount),
 		errors.Is(err, domain.ErrInvalidAccountType),

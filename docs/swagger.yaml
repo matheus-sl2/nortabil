@@ -90,6 +90,125 @@ paths:
         '404':
           description: Empresa não encontrada
 
+  /api/v1/periods:
+    get:
+      summary: Listar períodos contábeis do ano
+      description: Retorna o status de abertura ou fechamento de cada um dos 12 meses do ano contábil.
+      tags:
+        - Períodos e Fechamentos
+      parameters:
+        - name: year
+          in: query
+          schema:
+            type: integer
+            example: 2026
+        - name: X-Company-ID
+          in: header
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Lista dos períodos contábeis do ano
+
+  /api/v1/periods/close:
+    post:
+      summary: Fechar período contábil mensal
+      description: Bloqueia a inclusão ou alteração de lançamentos retroativos no mês especificado.
+      tags:
+        - Períodos e Fechamentos
+      parameters:
+        - name: X-Company-ID
+          in: header
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [year, month]
+              properties:
+                year:
+                  type: integer
+                  example: 2026
+                month:
+                  type: integer
+                  example: 10
+                closed_by:
+                  type: string
+                  example: "Contador Responsável CRC/MG 12345"
+      responses:
+        '200':
+          description: Período fechado com sucesso
+        '404':
+          description: Período não encontrado
+
+  /api/v1/periods/reopen:
+    post:
+      summary: Reabrir período contábil
+      description: Permite ao contador reabrir um mês previamente encerrado (desde que não esteja travado por auditoria).
+      tags:
+        - Períodos e Fechamentos
+      parameters:
+        - name: X-Company-ID
+          in: header
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [year, month]
+              properties:
+                year:
+                  type: integer
+                  example: 2026
+                month:
+                  type: integer
+                  example: 10
+      responses:
+        '200':
+          description: Período reaberto com sucesso
+        '403':
+          description: Período travado (LOCKED) não pode ser reaberto
+
+  /api/v1/periods/closing-year:
+    post:
+      summary: Apuração do Resultado do Exercício (ARE)
+      description: Zera todas as contas de Receita e Despesa do ano fiscal e transfere o resultado líquido (lucro ou prejuízo) para o Patrimônio Líquido.
+      tags:
+        - Períodos e Fechamentos
+      parameters:
+        - name: X-Company-ID
+          in: header
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [year]
+              properties:
+                year:
+                  type: integer
+                  example: 2026
+                result_account_id:
+                  type: string
+                  format: uuid
+                  description: UUID da conta analítica de Lucros ou Prejuízos Acumulados no Patrimônio Líquido
+      responses:
+        '200':
+          description: Exercício encerrado com sucesso com lançamento contábil de ARE gerado
+
   /api/v1/accounts:
     post:
       summary: Criar conta contábil

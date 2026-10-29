@@ -16,13 +16,15 @@ import (
 type JournalService struct {
 	journalRepo *postgres.JournalRepository
 	accountRepo *postgres.AccountRepository
+	periodRepo  *postgres.PeriodRepository
 }
 
 // NewJournalService cria uma nova instância do serviço contábil
-func NewJournalService(journalRepo *postgres.JournalRepository, accountRepo *postgres.AccountRepository) *JournalService {
+func NewJournalService(journalRepo *postgres.JournalRepository, accountRepo *postgres.AccountRepository, periodRepo *postgres.PeriodRepository) *JournalService {
 	return &JournalService{
 		journalRepo: journalRepo,
 		accountRepo: accountRepo,
+		periodRepo:  periodRepo,
 	}
 }
 
@@ -72,6 +74,17 @@ func (s *JournalService) CreateEntry(ctx context.Context, companyID uuid.UUID, i
 
 	if input.Date.IsZero() {
 		return nil, domain.ErrInvalidDate
+	}
+
+	// Verifica se o período contábil está aberto para novos lançamentos
+	if s.periodRepo != nil {
+		isOpen, err := s.periodRepo.IsPeriodOpen(ctx, companyID, input.Date)
+		if err != nil {
+			return nil, err
+		}
+		if !isOpen {
+			return nil, domain.ErrPeriodClosed
+		}
 	}
 
 	entry := &domain.JournalEntry{

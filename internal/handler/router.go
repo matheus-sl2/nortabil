@@ -19,6 +19,7 @@ func SetupRouter(
 	accountHandler *AccountHandler,
 	journalHandler *JournalHandler,
 	reportHandler *ReportHandler,
+	periodHandler *PeriodHandler,
 	swaggerYAML []byte,
 ) http.Handler {
 	r := chi.NewRouter()
@@ -125,6 +126,13 @@ func SetupRouter(
 					rep.Get("/journal", reportHandler.GetDailyBook)
 					rep.Get("/trial-balance", reportHandler.GetTrialBalance)
 				})
+
+				sub.Route("/periods", func(per chi.Router) {
+					per.Get("/", periodHandler.List)
+					per.Post("/close", periodHandler.Close)
+					per.Post("/reopen", periodHandler.Reopen)
+					per.Post("/closing-year", periodHandler.CloseYear)
+				})
 			})
 		})
 
@@ -150,6 +158,13 @@ func SetupRouter(
 				rep.Get("/ledger", reportHandler.GetLedger)
 				rep.Get("/journal", reportHandler.GetDailyBook)
 				rep.Get("/trial-balance", reportHandler.GetTrialBalance)
+			})
+
+			tenantGroup.Route("/periods", func(per chi.Router) {
+				per.Get("/", periodHandler.List)
+				per.Post("/close", periodHandler.Close)
+				per.Post("/reopen", periodHandler.Reopen)
+				per.Post("/closing-year", periodHandler.CloseYear)
 			})
 		})
 	})
