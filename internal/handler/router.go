@@ -20,6 +20,7 @@ func SetupRouter(
 	journalHandler *JournalHandler,
 	reportHandler *ReportHandler,
 	periodHandler *PeriodHandler,
+	reconciliationHandler *ReconciliationHandler,
 	swaggerYAML []byte,
 ) http.Handler {
 	r := chi.NewRouter()
@@ -133,6 +134,11 @@ func SetupRouter(
 					per.Post("/reopen", periodHandler.Reopen)
 					per.Post("/closing-year", periodHandler.CloseYear)
 				})
+
+				sub.Route("/reconciliation", func(rec chi.Router) {
+					rec.Post("/import-ofx", reconciliationHandler.ImportOFX)
+					rec.Get("/items", reconciliationHandler.ListItems)
+				})
 			})
 		})
 
@@ -165,6 +171,11 @@ func SetupRouter(
 				per.Post("/close", periodHandler.Close)
 				per.Post("/reopen", periodHandler.Reopen)
 				per.Post("/closing-year", periodHandler.CloseYear)
+			})
+
+			tenantGroup.Route("/reconciliation", func(rec chi.Router) {
+				rec.Post("/import-ofx", reconciliationHandler.ImportOFX)
+				rec.Get("/items", reconciliationHandler.ListItems)
 			})
 		})
 	})

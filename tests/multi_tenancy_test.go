@@ -65,3 +65,4 @@ func TestMultiTenantIsolation(t *testing.T) {
 		t.Fatalf("Multi-tenancy deve permitir que empresas diferentes tenham códigos iguais no plano")
 	}
 }
+

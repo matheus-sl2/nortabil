@@ -23,6 +23,9 @@ var migration003 string
 //go:embed migrations/004_create_accounting_periods.sql
 var migration004 string
 
+//go:embed migrations/005_create_bank_reconciliation.sql
+var migration005 string
+
 // DB encapsula o pool de conexões pgxpool
 type DB struct {
 	Pool *pgxpool.Pool
@@ -86,6 +89,11 @@ func (db *DB) RunMigrations(ctx context.Context, autoSeed bool) error {
 	log.Println("[MIGRAÇÃO] Aplicando controle de períodos contábeis (004_create_accounting_periods.sql)...")
 	if _, err := db.Pool.Exec(ctx, migration004); err != nil {
 		return fmt.Errorf("erro na migração 004 (períodos): %w", err)
+	}
+
+	log.Println("[MIGRAÇÃO] Aplicando conciliação bancária OFX (005_create_bank_reconciliation.sql)...")
+	if _, err := db.Pool.Exec(ctx, migration005); err != nil {
+		return fmt.Errorf("erro na migração 005 (conciliação bancária): %w", err)
 	}
 
 	if autoSeed {

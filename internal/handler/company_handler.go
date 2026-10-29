@@ -82,3 +82,4 @@ func (h *CompanyHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 
 	JSON(w, http.StatusOK, company)
 }
+

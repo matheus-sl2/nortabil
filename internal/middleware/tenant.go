@@ -62,3 +62,4 @@ func GetCompanyID(r *http.Request) uuid.UUID {
 	}
 	return domain.DefaultCompanyID
 }
+

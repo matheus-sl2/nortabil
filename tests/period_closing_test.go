@@ -97,3 +97,4 @@ func TestYearClosingCalculation(t *testing.T) {
 		t.Fatalf("Total Débitos (%v) diverge de Total Créditos (%v) no ARE", closingEntry.TotalDebit, closingEntry.TotalCredit)
 	}
 }
+

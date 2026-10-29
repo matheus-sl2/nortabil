@@ -476,6 +476,173 @@ paths:
         '200':
           description: Balancete de Verificação
 
+  /api/v1/periods:
+    get:
+      summary: Listar Períodos Contábeis
+      description: Lista o histórico de status de fechamento dos meses fiscais da empresa.
+      tags:
+        - Períodos e ARE
+      responses:
+        '200':
+          description: Lista de períodos contábeis
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AccountingPeriod'
+
+  /api/v1/periods/close:
+    post:
+      summary: Fechar Período Contábil (Trava de Mês)
+      description: Bloqueia novos lançamentos retroativos no mês especificado para garantir a inviolabilidade da escrituração.
+      tags:
+        - Períodos e ARE
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [year, month]
+              properties:
+                year:
+                  type: integer
+                  example: 2026
+                month:
+                  type: integer
+                  example: 10
+      responses:
+        '200':
+          description: Período encerrado com sucesso
+
+  /api/v1/periods/reopen:
+    post:
+      summary: Reabrir Período Contábil
+      description: Reabre o período contábil mediante justificativa do responsável técnico.
+      tags:
+        - Períodos e ARE
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [year, month]
+              properties:
+                year:
+                  type: integer
+                  example: 2026
+                month:
+                  type: integer
+                  example: 10
+      responses:
+        '200':
+          description: Período reaberto com sucesso
+
+  /api/v1/periods/closing-year:
+    post:
+      summary: Apuração do Resultado do Exercício (ARE Anual)
+      description: Zera todas as contas analíticas de Resultado (Receitas e Despesas) e transfere o Lucro Líquido ou Prejuízo Acumulado para o Patrimônio Líquido.
+      tags:
+        - Períodos e ARE
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [year]
+              properties:
+                year:
+                  type: integer
+                  example: 2026
+      responses:
+        '200':
+          description: ARE processada com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/YearClosingResult'
+
+  /api/v1/reconciliation/import-ofx:
+    post:
+      summary: Importar Extrato Bancário OFX e Conciliar Automaticamente
+      description: Processa extratos bancários em formato OFX (SGML/XML), gerando automaticamente as partidas dobradas entre a Conta Bancária do Ativo e a Conta de Contrapartida informada, evitando lançamentos duplicados por FITID.
+      tags:
+        - Conciliação Bancária
+      parameters:
+        - name: bank_account_id
+          in: query
+          required: false
+          description: UUID da conta contábil bancária do Ativo (obrigatório se não enviado no form)
+          schema:
+            type: string
+            format: uuid
+        - name: counterpart_account_id
+          in: query
+          required: false
+          description: UUID da conta de contrapartida (ex. Clientes ou Fornecedores)
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [bank_account_id, counterpart_account_id, file]
+              properties:
+                bank_account_id:
+                  type: string
+                  format: uuid
+                counterpart_account_id:
+                  type: string
+                  format: uuid
+                file:
+                  type: string
+                  format: binary
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: Resumo do processamento do extrato OFX
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OFXImportSummary'
+
+  /api/v1/reconciliation/items:
+    get:
+      summary: Listar Itens de Extrato Bancário
+      description: Retorna os registros importados do extrato bancário com seu status de conciliação e partida contábil associada.
+      tags:
+        - Conciliação Bancária
+      parameters:
+        - name: bank_account_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: unreconciled_only
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Lista de itens do extrato
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BankStatementItem'
+
 components:
   schemas:
     CreateCompanyInput:
@@ -690,4 +857,99 @@ components:
           type: integer
         duration_ms:
           type: integer
+
+    AccountingPeriod:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        company_id:
+          type: string
+          format: uuid
+        year:
+          type: integer
+        month:
+          type: integer
+        status:
+          type: string
+          enum: [OPEN, CLOSED, LOCKED]
+        closed_at:
+          type: string
+          format: date-time
+        closed_by:
+          type: string
+
+    YearClosingResult:
+      type: object
+      properties:
+        year:
+          type: integer
+        journal_entry_id:
+          type: string
+          format: uuid
+        total_revenues_closed:
+          type: string
+        total_expenses_closed:
+          type: string
+        net_result:
+          type: string
+        result_type:
+          type: string
+          enum: [PROFIT, LOSS, BALANCED]
+        target_account_id:
+          type: string
+          format: uuid
+        message:
+          type: string
+
+    OFXImportSummary:
+      type: object
+      properties:
+        total_read:
+          type: integer
+          description: Quantidade total de transações encontradas no extrato OFX
+        total_imported:
+          type: integer
+          description: Quantidade de transações novas convertidas em lançamentos contábeis
+        total_duplicates:
+          type: integer
+          description: Transações já existentes ignoradas para prevenir duplicidade
+        total_failed:
+          type: integer
+          description: Transações que falharam na validação contábil
+
+    BankStatementItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        company_id:
+          type: string
+          format: uuid
+        bank_account_id:
+          type: string
+          format: uuid
+        fitid:
+          type: string
+          description: Identificador único fornecido pela instituição bancária
+        date:
+          type: string
+          format: date-time
+        amount:
+          type: string
+        type:
+          type: string
+          enum: [DEBIT, CREDIT]
+        memo:
+          type: string
+        journal_entry_id:
+          type: string
+          format: uuid
+        reconciled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
 

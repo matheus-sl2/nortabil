@@ -42,3 +42,4 @@ type YearClosingSummary struct {
 	JournalEntryID   *uuid.UUID      `json:"journal_entry_id,omitempty"`
 	JournalEntryNum  int64           `json:"journal_entry_num,omitempty"`
 }
+

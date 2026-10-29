@@ -21,3 +21,4 @@ CREATE TABLE IF NOT EXISTS accounting_period (
 CREATE INDEX IF NOT EXISTS idx_accounting_period_company ON accounting_period(company_id);
 CREATE INDEX IF NOT EXISTS idx_accounting_period_status ON accounting_period(status);
 CREATE INDEX IF NOT EXISTS idx_accounting_period_range ON accounting_period(start_date, end_date);
+

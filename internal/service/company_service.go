@@ -96,3 +96,4 @@ func (s *CompanyService) GetByID(ctx context.Context, id uuid.UUID) (*domain.Com
 func (s *CompanyService) ListCompanies(ctx context.Context, activeOnly bool) ([]domain.Company, error) {
 	return s.companyRepo.List(ctx, activeOnly)
 }
+

@@ -203,3 +203,4 @@ func (s *PeriodService) ExecuteYearClosing(ctx context.Context, companyID uuid.U
 
 	return summary, nil
 }
+

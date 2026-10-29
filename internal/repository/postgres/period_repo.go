@@ -221,3 +221,4 @@ func (r *PeriodRepository) GetResultAccountsBalances(ctx context.Context, compan
 
 	return balances, nil
 }
+

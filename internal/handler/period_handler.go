@@ -102,3 +102,4 @@ func (h *PeriodHandler) CloseYear(w http.ResponseWriter, r *http.Request) {
 
 	JSON(w, http.StatusOK, summary)
 }
+
