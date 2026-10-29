@@ -54,6 +54,10 @@ func (h *PeriodHandler) Close(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if input.ClosedBy == "" {
+		input.ClosedBy = middleware.GetUserIdentity(r)
+	}
+
 	err := h.periodService.ClosePeriod(r.Context(), companyID, input.Year, input.Month, input.ClosedBy)
 	if err != nil {
 		HandleDomainError(w, err)

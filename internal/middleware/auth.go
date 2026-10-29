@@ -23,24 +23,27 @@ type TokenValidator interface {
 	ValidateToken(tokenString string) (interface{ GetClaims() (uuid.UUID, string, string, domain.UserRole) }, error)
 }
 
-// AuthMiddleware extrai e valida o token JWT do cabeçalho Authorization
+// AuthMiddleware extrai e valida o token JWT do cabeçalho Authorization ou query param ?token=
 func AuthMiddleware(validateFunc func(string) (uuid.UUID, string, string, domain.UserRole, error)) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var tokenString string
 			authHeader := r.Header.Get("Authorization")
-			if authHeader == "" {
+			if authHeader != "" {
+				parts := strings.SplitN(authHeader, " ", 2)
+				if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+					http.Error(w, `{"success":false,"error":"TOKEN_MALFORMED","message":"Formato de cabeçalho Authorization inválido. Use 'Bearer <token>'"}`, http.StatusUnauthorized)
+					return
+				}
+				tokenString = parts[1]
+			} else if qToken := strings.TrimSpace(r.URL.Query().Get("token")); qToken != "" {
+				tokenString = qToken
+			} else {
 				// Permite continuar sem autenticação para endpoints públicos, mas não injeta claims
 				next.ServeHTTP(w, r)
 				return
 			}
 
-			parts := strings.SplitN(authHeader, " ", 2)
-			if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
-				http.Error(w, `{"success":false,"error":"TOKEN_MALFORMED","message":"Formato de cabeçalho Authorization inválido. Use 'Bearer <token>'"}`, http.StatusUnauthorized)
-				return
-			}
-
-			tokenString := parts[1]
 			uid, email, name, role, err := validateFunc(tokenString)
 			if err != nil {
 				http.Error(w, `{"success":false,"error":"UNAUTHORIZED","message":"Token JWT inválido ou expirado"}`, http.StatusUnauthorized)
@@ -97,6 +100,21 @@ func GetUserRole(r *http.Request) domain.UserRole {
 		if role, ok := val.(domain.UserRole); ok {
 			return role
 		}
+	}
+	return ""
+}
+
+// GetUserIdentity retorna a identificação formatada do usuário autenticado para trilha de auditoria
+func GetUserIdentity(r *http.Request) string {
+	name, _ := r.Context().Value(ContextUserName).(string)
+	email, _ := r.Context().Value(ContextUserMail).(string)
+	role := GetUserRole(r)
+
+	if name != "" && email != "" {
+		return name + " (" + string(role) + ") <" + email + ">"
+	}
+	if email != "" {
+		return email
 	}
 	return ""
 }

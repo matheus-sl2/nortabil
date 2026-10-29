@@ -39,7 +39,20 @@ VALUES
         'CONTADOR',
         'MG-085421/O',
         TRUE
+    ),
+    (
+        'a1b2c3d4-e5f6-4a1b-8c2d-000000000003',
+        'Ana Paula Ribeiro (Assistente Contábil)',
+        'assistente@nortabil.com.br',
+        '$2a$10$wOAlcG7i8ulr/tuKMyYrPeRG8Ku9DioZfhuWk9eI5sAlwVr2llbVy',
+        'ASSISTENTE',
+        NULL,
+        TRUE
     )
 -- DO NOTHING: as migrações rodam a cada inicialização; não sobrescrever senhas alteradas pelos usuários
 ON CONFLICT (email) DO NOTHING;
+
+-- Rastreabilidade / Trilha de Auditoria do Usuário no Livro Diário
+ALTER TABLE journal_entry
+    ADD COLUMN IF NOT EXISTS created_by VARCHAR(150) NOT NULL DEFAULT 'Sistema Contábil';
 

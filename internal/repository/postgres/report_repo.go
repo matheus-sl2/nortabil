@@ -219,7 +219,7 @@ func (r *ReportRepository) GetDailyBookReport(ctx context.Context, companyID uui
 	}
 
 	entryQuery := `
-		SELECT id, company_id, entry_number, date, description, status, total_debit, total_credit, created_at, updated_at
+		SELECT id, company_id, entry_number, date, description, status, total_debit, total_credit, COALESCE(created_by, 'Sistema Contábil'), created_at, updated_at
 		FROM journal_entry
 		WHERE company_id = $1 AND date >= $2 AND date <= $3 AND status = 'POSTED'
 		ORDER BY date ASC, entry_number ASC
@@ -242,6 +242,7 @@ func (r *ReportRepository) GetDailyBookReport(ctx context.Context, companyID uui
 			&e.Status,
 			&e.TotalDebit,
 			&e.TotalCredit,
+			&e.CreatedBy,
 			&e.CreatedAt,
 			&e.UpdatedAt,
 		); err != nil {

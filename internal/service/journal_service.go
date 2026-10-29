@@ -41,6 +41,7 @@ type CreateJournalEntryInput struct {
 	CompanyID   *uuid.UUID               `json:"company_id,omitempty"`
 	Date        time.Time                `json:"date"`
 	Description string                   `json:"description"`
+	CreatedBy   string                   `json:"created_by,omitempty"`
 	Lines       []CreateJournalLineInput `json:"lines"`
 }
 
@@ -87,12 +88,18 @@ func (s *JournalService) CreateEntry(ctx context.Context, companyID uuid.UUID, i
 		}
 	}
 
+	createdBy := input.CreatedBy
+	if createdBy == "" {
+		createdBy = "Sistema Contábil"
+	}
+
 	entry := &domain.JournalEntry{
 		ID:          uuid.New(),
 		CompanyID:   companyID,
 		Date:        input.Date,
 		Description: input.Description,
 		Status:      domain.JournalStatusPosted,
+		CreatedBy:   createdBy,
 		Lines:       make([]domain.JournalLine, len(input.Lines)),
 	}
 

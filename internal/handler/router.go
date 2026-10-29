@@ -167,9 +167,9 @@ func SetupRouter(
 
 				sub.Route("/periods", func(per chi.Router) {
 					per.Get("/", periodHandler.List)
-					per.Post("/close", periodHandler.Close)
-					per.Post("/reopen", periodHandler.Reopen)
-					per.Post("/closing-year", periodHandler.CloseYear)
+					per.With(middleware.RequireRole(domain.RoleContador)).Post("/close", periodHandler.Close)
+					per.With(middleware.RequireRole(domain.RoleContador)).Post("/reopen", periodHandler.Reopen)
+					per.With(middleware.RequireRole(domain.RoleContador)).Post("/closing-year", periodHandler.CloseYear)
 				})
 
 				sub.Route("/reconciliation", func(rec chi.Router) {
@@ -211,9 +211,9 @@ func SetupRouter(
 
 			tenantGroup.Route("/periods", func(per chi.Router) {
 				per.Get("/", periodHandler.List)
-				per.Post("/close", periodHandler.Close)
-				per.Post("/reopen", periodHandler.Reopen)
-				per.Post("/closing-year", periodHandler.CloseYear)
+				per.With(middleware.RequireRole(domain.RoleContador)).Post("/close", periodHandler.Close)
+				per.With(middleware.RequireRole(domain.RoleContador)).Post("/reopen", periodHandler.Reopen)
+				per.With(middleware.RequireRole(domain.RoleContador)).Post("/closing-year", periodHandler.CloseYear)
 			})
 
 			tenantGroup.Route("/reconciliation", func(rec chi.Router) {

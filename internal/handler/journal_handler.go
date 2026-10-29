@@ -31,6 +31,10 @@ func (h *JournalHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if input.CreatedBy == "" {
+		input.CreatedBy = middleware.GetUserIdentity(r)
+	}
+
 	companyID := middleware.GetCompanyID(r)
 	entry, err := h.service.CreateEntry(r.Context(), companyID, input)
 	if err != nil {
@@ -47,6 +51,14 @@ func (h *JournalHandler) CreateBatch(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		JSONError(w, http.StatusBadRequest, "INVALID_JSON", "Corpo da requisição JSON inválido (esperado array de lançamentos)", err.Error())
 		return
+	}
+
+	if identity := middleware.GetUserIdentity(r); identity != "" {
+		for i := range input {
+			if input[i].CreatedBy == "" {
+				input[i].CreatedBy = identity
+			}
+		}
 	}
 
 	companyID := middleware.GetCompanyID(r)

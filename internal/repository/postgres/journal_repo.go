@@ -40,13 +40,16 @@ func (r *JournalRepository) CreateEntry(ctx context.Context, entry *domain.Journ
 	if entry.Status == "" {
 		entry.Status = domain.JournalStatusPosted
 	}
+	if entry.CreatedBy == "" {
+		entry.CreatedBy = "Sistema Contábil"
+	}
 	entry.CreatedAt = now
 	entry.UpdatedAt = now
 
 	// 1. Insere o cabeçalho do lançamento
 	entryQuery := `
-		INSERT INTO journal_entry (id, company_id, date, description, status, total_debit, total_credit, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO journal_entry (id, company_id, date, description, status, total_debit, total_credit, created_by, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING entry_number
 	`
 	err = tx.QueryRow(ctx, entryQuery,
@@ -57,6 +60,7 @@ func (r *JournalRepository) CreateEntry(ctx context.Context, entry *domain.Journ
 		entry.Status,
 		entry.TotalDebit,
 		entry.TotalCredit,
+		entry.CreatedBy,
 		entry.CreatedAt,
 		entry.UpdatedAt,
 	).Scan(&entry.EntryNumber)
@@ -102,7 +106,7 @@ func (r *JournalRepository) CreateEntry(ctx context.Context, entry *domain.Journ
 // GetByID busca um lançamento pelo seu ID incluindo todas as partidas contábeis
 func (r *JournalRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.JournalEntry, error) {
 	entryQuery := `
-		SELECT id, company_id, entry_number, date, description, status, total_debit, total_credit, created_at, updated_at
+		SELECT id, company_id, entry_number, date, description, status, total_debit, total_credit, COALESCE(created_by, 'Sistema Contábil'), created_at, updated_at
 		FROM journal_entry
 		WHERE id = $1
 	`
@@ -116,6 +120,7 @@ func (r *JournalRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.
 		&entry.Status,
 		&entry.TotalDebit,
 		&entry.TotalCredit,
+		&entry.CreatedBy,
 		&entry.CreatedAt,
 		&entry.UpdatedAt,
 	)
@@ -212,7 +217,7 @@ func (r *JournalRepository) List(ctx context.Context, f ListFilter) ([]domain.Jo
 
 	// Busca com paginação
 	query := `
-		SELECT id, company_id, entry_number, date, description, status, total_debit, total_credit, created_at, updated_at
+		SELECT id, company_id, entry_number, date, description, status, total_debit, total_credit, COALESCE(created_by, 'Sistema Contábil'), created_at, updated_at
 		FROM journal_entry
 	` + whereClause + fmt.Sprintf(" ORDER BY date DESC, entry_number DESC LIMIT $%d OFFSET $%d", argIdx, argIdx+1)
 	args = append(args, f.Limit, f.Offset)
@@ -235,12 +240,45 @@ func (r *JournalRepository) List(ctx context.Context, f ListFilter) ([]domain.Jo
 			&e.Status,
 			&e.TotalDebit,
 			&e.TotalCredit,
+			&e.CreatedBy,
 			&e.CreatedAt,
 			&e.UpdatedAt,
 		); err != nil {
 			return nil, 0, fmt.Errorf("erro ao ler cabeçalho: %w", err)
 		}
 		entries = append(entries, e)
+	}
+
+	// Carrega as partidas dobradas de cada lançamento listado
+	linesQuery := `
+		SELECT jl.id, jl.journal_entry_id, jl.account_id, a.code, a.name, jl.type, jl.amount, COALESCE(jl.description, ''), jl.created_at
+		FROM journal_line jl
+		JOIN account a ON a.id = jl.account_id
+		WHERE jl.journal_entry_id = $1
+		ORDER BY jl.type DESC, jl.amount DESC
+	`
+	for i := range entries {
+		lRows, err := r.db.Pool.Query(ctx, linesQuery, entries[i].ID)
+		if err != nil {
+			continue
+		}
+		for lRows.Next() {
+			var line domain.JournalLine
+			if err := lRows.Scan(
+				&line.ID,
+				&line.JournalEntryID,
+				&line.AccountID,
+				&line.AccountCode,
+				&line.AccountName,
+				&line.Type,
+				&line.Amount,
+				&line.Description,
+				&line.CreatedAt,
+			); err == nil {
+				entries[i].Lines = append(entries[i].Lines, line)
+			}
+		}
+		lRows.Close()
 	}
 
 	return entries, total, nil
@@ -253,7 +291,7 @@ func (r *JournalRepository) GetEntriesForPeriod(ctx context.Context, companyID u
 	}
 
 	entriesQuery := `
-		SELECT id, company_id, entry_number, date, description, status, total_debit, total_credit, created_at, updated_at
+		SELECT id, company_id, entry_number, date, description, status, total_debit, total_credit, COALESCE(created_by, 'Sistema Contábil'), created_at, updated_at
 		FROM journal_entry
 		WHERE company_id = $1 AND date >= $2 AND date <= $3
 		ORDER BY date ASC, entry_number ASC
@@ -278,6 +316,7 @@ func (r *JournalRepository) GetEntriesForPeriod(ctx context.Context, companyID u
 			&e.Status,
 			&e.TotalDebit,
 			&e.TotalCredit,
+			&e.CreatedBy,
 			&e.CreatedAt,
 			&e.UpdatedAt,
 		); err != nil {

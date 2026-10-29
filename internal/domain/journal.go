@@ -47,8 +47,9 @@ type JournalEntry struct {
 	Description string          `json:"description"`  // Histórico da operação (Resolução CFC ITG 2000)
 	Status      JournalStatus   `json:"status"`       // POSTED, DRAFT, REVERSED
 	Lines       []JournalLine   `json:"lines"`        // As partidas dobradas
-	TotalDebit  decimal.Decimal `json:"total_debit"`  // Totalizador de débitos
-	TotalCredit decimal.Decimal `json:"total_credit"` // Totalizador de créditos
+	TotalDebit  decimal.Decimal `json:"total_debit"`          // Totalizador de débitos
+	TotalCredit decimal.Decimal `json:"total_credit"`         // Totalizador de créditos
+	CreatedBy   string          `json:"created_by,omitempty"` // Responsável autenticado (Trilha de Auditoria)
 	CreatedAt   time.Time       `json:"created_at"`
 	UpdatedAt   time.Time       `json:"updated_at"`
 }
