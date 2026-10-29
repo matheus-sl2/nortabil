@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/matheus-sl2/nortabil/internal/middleware"
 	"github.com/matheus-sl2/nortabil/internal/service"
 )
 
@@ -19,16 +20,8 @@ func NewReportHandler(service *service.ReportService) *ReportHandler {
 }
 
 // GetLedger gera o Livro Razão
-// @Summary Gerar Livro Razão
-// @Description Emite o Livro Razão contábil detalhado por conta no período especificado
-// @Tags Relatórios
-// @Produce json
-// @Param start_date query string false "Data inicial (YYYY-MM-DD, padrão: 30 dias atrás)"
-// @Param end_date query string false "Data final (YYYY-MM-DD, padrão: hoje)"
-// @Param account_id query string false "Filtrar por UUID de uma conta analítica específica"
-// @Success 200 {object} domain.LedgerReport
-// @Router /api/v1/reports/ledger [get]
 func (h *ReportHandler) GetLedger(w http.ResponseWriter, r *http.Request) {
+	companyID := middleware.GetCompanyID(r)
 	startDate, endDate, err := parseDateRange(r)
 	if err != nil {
 		JSONError(w, http.StatusBadRequest, "INVALID_DATE_FORMAT", err.Error(), nil)
@@ -45,7 +38,7 @@ func (h *ReportHandler) GetLedger(w http.ResponseWriter, r *http.Request) {
 		accountID = &id
 	}
 
-	report, err := h.service.GetLedger(r.Context(), startDate, endDate, accountID)
+	report, err := h.service.GetLedger(r.Context(), companyID, startDate, endDate, accountID)
 	if err != nil {
 		HandleDomainError(w, err)
 		return
@@ -55,22 +48,15 @@ func (h *ReportHandler) GetLedger(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetDailyBook gera o Livro Diário Geral
-// @Summary Gerar Livro Diário Geral
-// @Description Emite o Livro Diário cronológico com todas as operações registradas no período
-// @Tags Relatórios
-// @Produce json
-// @Param start_date query string false "Data inicial (YYYY-MM-DD)"
-// @Param end_date query string false "Data final (YYYY-MM-DD)"
-// @Success 200 {object} domain.DailyBookReport
-// @Router /api/v1/reports/journal [get]
 func (h *ReportHandler) GetDailyBook(w http.ResponseWriter, r *http.Request) {
+	companyID := middleware.GetCompanyID(r)
 	startDate, endDate, err := parseDateRange(r)
 	if err != nil {
 		JSONError(w, http.StatusBadRequest, "INVALID_DATE_FORMAT", err.Error(), nil)
 		return
 	}
 
-	report, err := h.service.GetDailyBook(r.Context(), startDate, endDate)
+	report, err := h.service.GetDailyBook(r.Context(), companyID, startDate, endDate)
 	if err != nil {
 		HandleDomainError(w, err)
 		return
@@ -80,22 +66,15 @@ func (h *ReportHandler) GetDailyBook(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetTrialBalance gera o Balancete de Verificação
-// @Summary Gerar Balancete de Verificação
-// @Description Emite o Balancete de Verificação contendo saldos anteriores, movimentações e saldos finais de todas as contas
-// @Tags Relatórios
-// @Produce json
-// @Param start_date query string false "Data inicial (YYYY-MM-DD)"
-// @Param end_date query string false "Data final (YYYY-MM-DD)"
-// @Success 200 {object} domain.TrialBalanceReport
-// @Router /api/v1/reports/trial-balance [get]
 func (h *ReportHandler) GetTrialBalance(w http.ResponseWriter, r *http.Request) {
+	companyID := middleware.GetCompanyID(r)
 	startDate, endDate, err := parseDateRange(r)
 	if err != nil {
 		JSONError(w, http.StatusBadRequest, "INVALID_DATE_FORMAT", err.Error(), nil)
 		return
 	}
 
-	report, err := h.service.GetTrialBalance(r.Context(), startDate, endDate)
+	report, err := h.service.GetTrialBalance(r.Context(), companyID, startDate, endDate)
 	if err != nil {
 		HandleDomainError(w, err)
 		return
@@ -127,4 +106,3 @@ func parseDateRange(r *http.Request) (time.Time, time.Time, error) {
 
 	return startDate, endDate, nil
 }
-

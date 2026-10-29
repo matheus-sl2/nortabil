@@ -45,26 +45,30 @@ func main() {
 	}
 
 	// 3. Injeção de Dependências
+	var companyHandler *handler.CompanyHandler
 	var accountHandler *handler.AccountHandler
 	var journalHandler *handler.JournalHandler
 	var reportHandler *handler.ReportHandler
 
 	if db != nil {
+		companyRepo := postgres.NewCompanyRepository(db)
 		accountRepo := postgres.NewAccountRepository(db)
 		journalRepo := postgres.NewJournalRepository(db)
 		reportRepo := postgres.NewReportRepository(db, accountRepo)
 
+		companyService := service.NewCompanyService(companyRepo)
 		accountService := service.NewAccountService(accountRepo)
 		journalService := service.NewJournalService(journalRepo, accountRepo)
 		reportService := service.NewReportService(reportRepo)
 
+		companyHandler = handler.NewCompanyHandler(companyService)
 		accountHandler = handler.NewAccountHandler(accountService)
 		journalHandler = handler.NewJournalHandler(journalService)
 		reportHandler = handler.NewReportHandler(reportService)
 	}
 
 	// 4. Configuração das Rotas e Servidor HTTP
-	router := handler.SetupRouter(db, accountHandler, journalHandler, reportHandler, docs.SwaggerYAML)
+	router := handler.SetupRouter(db, companyHandler, accountHandler, journalHandler, reportHandler, docs.SwaggerYAML)
 
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%s", cfg.Port),

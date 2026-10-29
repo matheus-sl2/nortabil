@@ -34,6 +34,9 @@ func (r *JournalRepository) CreateEntry(ctx context.Context, entry *domain.Journ
 	if entry.ID == uuid.Nil {
 		entry.ID = uuid.New()
 	}
+	if entry.CompanyID == uuid.Nil {
+		entry.CompanyID = domain.DefaultCompanyID
+	}
 	if entry.Status == "" {
 		entry.Status = domain.JournalStatusPosted
 	}
@@ -42,12 +45,13 @@ func (r *JournalRepository) CreateEntry(ctx context.Context, entry *domain.Journ
 
 	// 1. Insere o cabeçalho do lançamento
 	entryQuery := `
-		INSERT INTO journal_entry (id, date, description, status, total_debit, total_credit, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO journal_entry (id, company_id, date, description, status, total_debit, total_credit, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING entry_number
 	`
 	err = tx.QueryRow(ctx, entryQuery,
 		entry.ID,
+		entry.CompanyID,
 		entry.Date,
 		entry.Description,
 		entry.Status,
@@ -98,13 +102,14 @@ func (r *JournalRepository) CreateEntry(ctx context.Context, entry *domain.Journ
 // GetByID busca um lançamento pelo seu ID incluindo todas as partidas contábeis
 func (r *JournalRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.JournalEntry, error) {
 	entryQuery := `
-		SELECT id, entry_number, date, description, status, total_debit, total_credit, created_at, updated_at
+		SELECT id, company_id, entry_number, date, description, status, total_debit, total_credit, created_at, updated_at
 		FROM journal_entry
 		WHERE id = $1
 	`
 	var entry domain.JournalEntry
 	err := r.db.Pool.QueryRow(ctx, entryQuery, id).Scan(
 		&entry.ID,
+		&entry.CompanyID,
 		&entry.EntryNumber,
 		&entry.Date,
 		&entry.Description,
@@ -158,6 +163,7 @@ func (r *JournalRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.
 
 // ListFilter parâmetros para filtragem da listagem de lançamentos
 type ListFilter struct {
+	CompanyID uuid.UUID
 	StartDate *time.Time
 	EndDate   *time.Time
 	Status    string
@@ -165,8 +171,11 @@ type ListFilter struct {
 	Offset    int
 }
 
-// List busca lançamentos contábeis conforme filtros de período e paginação
+// List busca lançamentos contábeis conforme filtros de empresa, período e paginação
 func (r *JournalRepository) List(ctx context.Context, f ListFilter) ([]domain.JournalEntry, int, error) {
+	if f.CompanyID == uuid.Nil {
+		f.CompanyID = domain.DefaultCompanyID
+	}
 	if f.Limit <= 0 || f.Limit > 500 {
 		f.Limit = 50
 	}
@@ -174,9 +183,9 @@ func (r *JournalRepository) List(ctx context.Context, f ListFilter) ([]domain.Jo
 		f.Offset = 0
 	}
 
-	whereClause := " WHERE 1=1"
-	args := []interface{}{}
-	argIdx := 1
+	whereClause := " WHERE company_id = $1"
+	args := []interface{}{f.CompanyID}
+	argIdx := 2
 
 	if f.StartDate != nil {
 		whereClause += fmt.Sprintf(" AND date >= $%d", argIdx)
@@ -203,7 +212,7 @@ func (r *JournalRepository) List(ctx context.Context, f ListFilter) ([]domain.Jo
 
 	// Busca com paginação
 	query := `
-		SELECT id, entry_number, date, description, status, total_debit, total_credit, created_at, updated_at
+		SELECT id, company_id, entry_number, date, description, status, total_debit, total_credit, created_at, updated_at
 		FROM journal_entry
 	` + whereClause + fmt.Sprintf(" ORDER BY date DESC, entry_number DESC LIMIT $%d OFFSET $%d", argIdx, argIdx+1)
 	args = append(args, f.Limit, f.Offset)
@@ -219,6 +228,7 @@ func (r *JournalRepository) List(ctx context.Context, f ListFilter) ([]domain.Jo
 		var e domain.JournalEntry
 		if err := rows.Scan(
 			&e.ID,
+			&e.CompanyID,
 			&e.EntryNumber,
 			&e.Date,
 			&e.Description,
@@ -235,4 +245,3 @@ func (r *JournalRepository) List(ctx context.Context, f ListFilter) ([]domain.Jo
 
 	return entries, total, nil
 }
-

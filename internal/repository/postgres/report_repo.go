@@ -21,8 +21,12 @@ func NewReportRepository(db *DB, accountRepo *AccountRepository) *ReportReposito
 	return &ReportRepository{db: db, accountRepo: accountRepo}
 }
 
-// GetLedgerReport gera o Livro Razão analítico para um período
-func (r *ReportRepository) GetLedgerReport(ctx context.Context, startDate, endDate time.Time, accountID *uuid.UUID) (*domain.LedgerReport, error) {
+// GetLedgerReport gera o Livro Razão analítico para um período isolado por empresa
+func (r *ReportRepository) GetLedgerReport(ctx context.Context, companyID uuid.UUID, startDate, endDate time.Time, accountID *uuid.UUID) (*domain.LedgerReport, error) {
+	if companyID == uuid.Nil {
+		companyID = domain.DefaultCompanyID
+	}
+
 	report := &domain.LedgerReport{
 		StartDate:   startDate,
 		EndDate:     endDate,
@@ -30,19 +34,22 @@ func (r *ReportRepository) GetLedgerReport(ctx context.Context, startDate, endDa
 		Accounts:    []domain.AccountLedger{},
 	}
 
-	// 1. Seleciona as contas analíticas a serem processadas
+	// 1. Seleciona as contas analíticas da empresa a serem processadas
 	var accounts []domain.Account
 	if accountID != nil {
 		acc, err := r.accountRepo.GetByID(ctx, *accountID)
 		if err != nil {
 			return nil, err
 		}
+		if acc.CompanyID != companyID {
+			return nil, domain.ErrMismatchedCompanyTenant
+		}
 		if acc.IsSynthetic {
 			return nil, domain.ErrSyntheticAccountPostNotAllowed
 		}
 		accounts = append(accounts, *acc)
 	} else {
-		all, err := r.accountRepo.List(ctx, false)
+		all, err := r.accountRepo.List(ctx, companyID, false)
 		if err != nil {
 			return nil, err
 		}
@@ -55,17 +62,17 @@ func (r *ReportRepository) GetLedgerReport(ctx context.Context, startDate, endDa
 
 	// 2. Para cada conta analítica, calcula o saldo inicial anterior e as movimentações do período
 	for _, acc := range accounts {
-		// Saldo anterior a startDate
+		// Saldo anterior a startDate para a empresa específica
 		initialQuery := `
 			SELECT 
 				COALESCE(SUM(CASE WHEN jl.type = 'DEBIT' THEN jl.amount ELSE 0 END), 0) AS debits,
 				COALESCE(SUM(CASE WHEN jl.type = 'CREDIT' THEN jl.amount ELSE 0 END), 0) AS credits
 			FROM journal_line jl
 			JOIN journal_entry je ON je.id = jl.journal_entry_id
-			WHERE jl.account_id = $1 AND je.date < $2 AND je.status = 'POSTED'
+			WHERE jl.account_id = $1 AND je.company_id = $2 AND je.date < $3 AND je.status = 'POSTED'
 		`
 		var prevDebits, prevCredits decimal.Decimal
-		err := r.db.Pool.QueryRow(ctx, initialQuery, acc.ID, startDate).Scan(&prevDebits, &prevCredits)
+		err := r.db.Pool.QueryRow(ctx, initialQuery, acc.ID, companyID, startDate).Scan(&prevDebits, &prevCredits)
 		if err != nil {
 			return nil, fmt.Errorf("erro ao calcular saldo inicial da conta %s: %w", acc.Code, err)
 		}
@@ -85,7 +92,7 @@ func (r *ReportRepository) GetLedgerReport(ctx context.Context, startDate, endDa
 			initialNature = acc.Nature
 		}
 
-		// Movimentações no período
+		// Movimentações no período para a empresa
 		movQuery := `
 			SELECT 
 				je.date,
@@ -96,10 +103,10 @@ func (r *ReportRepository) GetLedgerReport(ctx context.Context, startDate, endDa
 				jl.amount
 			FROM journal_line jl
 			JOIN journal_entry je ON je.id = jl.journal_entry_id
-			WHERE jl.account_id = $1 AND je.date >= $2 AND je.date <= $3 AND je.status = 'POSTED'
+			WHERE jl.account_id = $1 AND je.company_id = $2 AND je.date >= $3 AND je.date <= $4 AND je.status = 'POSTED'
 			ORDER BY je.date ASC, je.entry_number ASC, jl.created_at ASC
 		`
-		rows, err := r.db.Pool.Query(ctx, movQuery, acc.ID, startDate, endDate)
+		rows, err := r.db.Pool.Query(ctx, movQuery, acc.ID, companyID, startDate, endDate)
 		if err != nil {
 			return nil, fmt.Errorf("erro ao consultar movimentações da conta %s: %w", acc.Code, err)
 		}
@@ -108,8 +115,6 @@ func (r *ReportRepository) GetLedgerReport(ctx context.Context, startDate, endDa
 		totalDebit := decimal.Zero
 		totalCredit := decimal.Zero
 
-		// Saldo corrente acumulado linha a linha
-		// Convenção interna: Débito é positivo (+), Crédito é negativo (-)
 		currentBalanceSign := prevDebits.Sub(prevCredits)
 
 		for rows.Next() {
@@ -163,7 +168,6 @@ func (r *ReportRepository) GetLedgerReport(ctx context.Context, startDate, endDa
 		}
 		rows.Close()
 
-		// Saldo final da conta
 		var finalBalance decimal.Decimal
 		var finalNature domain.AccountNature
 		if currentBalanceSign.IsPositive() {
@@ -177,7 +181,6 @@ func (r *ReportRepository) GetLedgerReport(ctx context.Context, startDate, endDa
 			finalNature = acc.Nature
 		}
 
-		// Se a conta não tem saldo anterior nem movimentação no período, só adicionamos se filtrada individualmente
 		if accountID != nil || !initialBalance.IsZero() || len(movements) > 0 {
 			report.Accounts = append(report.Accounts, domain.AccountLedger{
 				AccountID:      acc.ID,
@@ -199,8 +202,12 @@ func (r *ReportRepository) GetLedgerReport(ctx context.Context, startDate, endDa
 	return report, nil
 }
 
-// GetDailyBookReport gera o Livro Diário Geral ordenado cronologicamente
-func (r *ReportRepository) GetDailyBookReport(ctx context.Context, startDate, endDate time.Time) (*domain.DailyBookReport, error) {
+// GetDailyBookReport gera o Livro Diário Geral cronológico filtrado por empresa
+func (r *ReportRepository) GetDailyBookReport(ctx context.Context, companyID uuid.UUID, startDate, endDate time.Time) (*domain.DailyBookReport, error) {
+	if companyID == uuid.Nil {
+		companyID = domain.DefaultCompanyID
+	}
+
 	report := &domain.DailyBookReport{
 		StartDate:    startDate,
 		EndDate:      endDate,
@@ -211,12 +218,12 @@ func (r *ReportRepository) GetDailyBookReport(ctx context.Context, startDate, en
 	}
 
 	entryQuery := `
-		SELECT id, entry_number, date, description, status, total_debit, total_credit, created_at, updated_at
+		SELECT id, company_id, entry_number, date, description, status, total_debit, total_credit, created_at, updated_at
 		FROM journal_entry
-		WHERE date >= $1 AND date <= $2 AND status = 'POSTED'
+		WHERE company_id = $1 AND date >= $2 AND date <= $3 AND status = 'POSTED'
 		ORDER BY date ASC, entry_number ASC
 	`
-	rows, err := r.db.Pool.Query(ctx, entryQuery, startDate, endDate)
+	rows, err := r.db.Pool.Query(ctx, entryQuery, companyID, startDate, endDate)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao buscar lançamentos do diário: %w", err)
 	}
@@ -227,6 +234,7 @@ func (r *ReportRepository) GetDailyBookReport(ctx context.Context, startDate, en
 		var e domain.JournalEntry
 		if err := rows.Scan(
 			&e.ID,
+			&e.CompanyID,
 			&e.EntryNumber,
 			&e.Date,
 			&e.Description,
@@ -244,7 +252,6 @@ func (r *ReportRepository) GetDailyBookReport(ctx context.Context, startDate, en
 	}
 	rows.Close()
 
-	// Busca as partidas de todos os lançamentos
 	for i := range entries {
 		linesQuery := `
 			SELECT jl.id, jl.journal_entry_id, jl.account_id, a.code, a.name, jl.type, jl.amount, COALESCE(jl.description, ''), jl.created_at
@@ -283,9 +290,13 @@ func (r *ReportRepository) GetDailyBookReport(ctx context.Context, startDate, en
 	return report, nil
 }
 
-// GetTrialBalanceReport gera o Balancete de Verificação completo com totalização hierárquica
-func (r *ReportRepository) GetTrialBalanceReport(ctx context.Context, startDate, endDate time.Time) (*domain.TrialBalanceReport, error) {
-	allAccounts, err := r.accountRepo.List(ctx, false)
+// GetTrialBalanceReport gera o Balancete de Verificação completo isolado por empresa
+func (r *ReportRepository) GetTrialBalanceReport(ctx context.Context, companyID uuid.UUID, startDate, endDate time.Time) (*domain.TrialBalanceReport, error) {
+	if companyID == uuid.Nil {
+		companyID = domain.DefaultCompanyID
+	}
+
+	allAccounts, err := r.accountRepo.List(ctx, companyID, false)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao listar contas para balancete: %w", err)
 	}
@@ -301,7 +312,6 @@ func (r *ReportRepository) GetTrialBalanceReport(ctx context.Context, startDate,
 		TotalCreditorBalance: decimal.Zero,
 	}
 
-	// Mapeia totais por conta analítica
 	type accTotals struct {
 		prevDebits   decimal.Decimal
 		prevCredits  decimal.Decimal
@@ -310,20 +320,19 @@ func (r *ReportRepository) GetTrialBalanceReport(ctx context.Context, startDate,
 	}
 	analyticTotals := make(map[uuid.UUID]*accTotals)
 
-	// Consulta agregações do período anterior e corrente para todas as contas analíticas
 	summaryQuery := `
 		SELECT 
 			jl.account_id,
-			COALESCE(SUM(CASE WHEN je.date < $1 AND jl.type = 'DEBIT' THEN jl.amount ELSE 0 END), 0) AS prev_debits,
-			COALESCE(SUM(CASE WHEN je.date < $1 AND jl.type = 'CREDIT' THEN jl.amount ELSE 0 END), 0) AS prev_credits,
-			COALESCE(SUM(CASE WHEN je.date >= $1 AND je.date <= $2 AND jl.type = 'DEBIT' THEN jl.amount ELSE 0 END), 0) AS period_debits,
-			COALESCE(SUM(CASE WHEN je.date >= $1 AND je.date <= $2 AND jl.type = 'CREDIT' THEN jl.amount ELSE 0 END), 0) AS period_credits
+			COALESCE(SUM(CASE WHEN je.date < $2 AND jl.type = 'DEBIT' THEN jl.amount ELSE 0 END), 0) AS prev_debits,
+			COALESCE(SUM(CASE WHEN je.date < $2 AND jl.type = 'CREDIT' THEN jl.amount ELSE 0 END), 0) AS prev_credits,
+			COALESCE(SUM(CASE WHEN je.date >= $2 AND je.date <= $3 AND jl.type = 'DEBIT' THEN jl.amount ELSE 0 END), 0) AS period_debits,
+			COALESCE(SUM(CASE WHEN je.date >= $2 AND je.date <= $3 AND jl.type = 'CREDIT' THEN jl.amount ELSE 0 END), 0) AS period_credits
 		FROM journal_line jl
 		JOIN journal_entry je ON je.id = jl.journal_entry_id
-		WHERE je.status = 'POSTED' AND je.date <= $2
+		WHERE je.company_id = $1 AND je.status = 'POSTED' AND je.date <= $3
 		GROUP BY jl.account_id
 	`
-	rows, err := r.db.Pool.Query(ctx, summaryQuery, startDate, endDate)
+	rows, err := r.db.Pool.Query(ctx, summaryQuery, companyID, startDate, endDate)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao obter somatórios para o balancete: %w", err)
 	}
@@ -338,7 +347,6 @@ func (r *ReportRepository) GetTrialBalanceReport(ctx context.Context, startDate,
 		analyticTotals[accID] = t
 	}
 
-	// Para cada conta (sintética ou analítica), calculamos o valor considerando todos os descendentes com prefixo do código
 	for _, acc := range allAccounts {
 		item := domain.TrialBalanceItem{
 			AccountID:   acc.ID,
@@ -346,13 +354,12 @@ func (r *ReportRepository) GetTrialBalanceReport(ctx context.Context, startDate,
 			AccountName: acc.Name,
 			AccountType: acc.Type,
 			IsSynthetic: acc.IsSynthetic,
-			Level:       len(acc.Code), // Nível de profundidade aproximado
+			Level:       len(acc.Code),
 		}
 
 		var sumPrevDebits, sumPrevCredits, sumPeriodDebit, sumPeriodCredit decimal.Decimal
 
 		if acc.IsSynthetic {
-			// Soma de todas as contas filhas analíticas cujo código começa com o prefixo da conta sintética
 			prefix := acc.Code + "."
 			for _, sub := range allAccounts {
 				if !sub.IsSynthetic && (sub.Code == acc.Code || len(sub.Code) > len(prefix) && sub.Code[:len(prefix)] == prefix) {
@@ -373,7 +380,6 @@ func (r *ReportRepository) GetTrialBalanceReport(ctx context.Context, startDate,
 			}
 		}
 
-		// Saldo inicial
 		prevDiff := sumPrevDebits.Sub(sumPrevCredits)
 		if prevDiff.IsPositive() {
 			item.InitialBalance = prevDiff
@@ -389,7 +395,6 @@ func (r *ReportRepository) GetTrialBalanceReport(ctx context.Context, startDate,
 		item.PeriodDebit = sumPeriodDebit
 		item.PeriodCredit = sumPeriodCredit
 
-		// Saldo final
 		finalDiff := (sumPrevDebits.Add(sumPeriodDebit)).Sub(sumPrevCredits.Add(sumPeriodCredit))
 		if finalDiff.IsPositive() {
 			item.FinalBalance = finalDiff
@@ -402,7 +407,6 @@ func (r *ReportRepository) GetTrialBalanceReport(ctx context.Context, startDate,
 			item.FinalNature = acc.Nature
 		}
 
-		// Acumula totalizadores gerais apenas das contas analíticas para evitar dupla contagem com sintéticas
 		if !acc.IsSynthetic {
 			report.TotalPeriodDebit = report.TotalPeriodDebit.Add(sumPeriodDebit)
 			report.TotalPeriodCredit = report.TotalPeriodCredit.Add(sumPeriodCredit)
@@ -417,11 +421,8 @@ func (r *ReportRepository) GetTrialBalanceReport(ctx context.Context, startDate,
 		report.Items = append(report.Items, item)
 	}
 
-	// Balancete está balanceado se Total Débitos do Período == Total Créditos do Período
-	// e Total Saldo Devedor == Total Saldo Credor
 	report.IsBalanced = report.TotalPeriodDebit.Equal(report.TotalPeriodCredit) &&
 		report.TotalDebtorBalance.Equal(report.TotalCreditorBalance)
 
 	return report, nil
 }
-

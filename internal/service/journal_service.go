@@ -36,18 +36,19 @@ type CreateJournalLineInput struct {
 
 // CreateJournalEntryInput representa o lançamento no payload de entrada
 type CreateJournalEntryInput struct {
+	CompanyID   *uuid.UUID               `json:"company_id,omitempty"`
 	Date        time.Time                `json:"date"`
 	Description string                   `json:"description"`
 	Lines       []CreateJournalLineInput `json:"lines"`
 }
 
-// BatchResult armazena o resultado do processamento de um item do lote
+// BatchItemResult armazena o resultado do processamento de um item do lote
 type BatchItemResult struct {
-	Index       int                  `json:"index"`
-	Success     bool                 `json:"success"`
-	EntryID     *uuid.UUID           `json:"entry_id,omitempty"`
-	EntryNumber int64                `json:"entry_number,omitempty"`
-	Error       string               `json:"error,omitempty"`
+	Index       int        `json:"index"`
+	Success     bool       `json:"success"`
+	EntryID     *uuid.UUID `json:"entry_id,omitempty"`
+	EntryNumber int64      `json:"entry_number,omitempty"`
+	Error       string     `json:"error,omitempty"`
 }
 
 // BatchProcessReport resume a execução em lote
@@ -59,14 +60,23 @@ type BatchProcessReport struct {
 	Results        []BatchItemResult `json:"results"`
 }
 
-// CreateEntry valida e registra um lançamento contábil garantindo a Lei de Luca Pacioli
-func (s *JournalService) CreateEntry(ctx context.Context, input CreateJournalEntryInput) (*domain.JournalEntry, error) {
+// CreateEntry valida e registra um lançamento contábil garantindo a Lei de Luca Pacioli e o isolamento multi-tenant
+func (s *JournalService) CreateEntry(ctx context.Context, companyID uuid.UUID, input CreateJournalEntryInput) (*domain.JournalEntry, error) {
+	if companyID == uuid.Nil {
+		if input.CompanyID != nil && *input.CompanyID != uuid.Nil {
+			companyID = *input.CompanyID
+		} else {
+			companyID = domain.DefaultCompanyID
+		}
+	}
+
 	if input.Date.IsZero() {
 		return nil, domain.ErrInvalidDate
 	}
 
 	entry := &domain.JournalEntry{
 		ID:          uuid.New(),
+		CompanyID:   companyID,
 		Date:        input.Date,
 		Description: input.Description,
 		Status:      domain.JournalStatusPosted,
@@ -90,11 +100,15 @@ func (s *JournalService) CreateEntry(ctx context.Context, input CreateJournalEnt
 		return nil, err
 	}
 
-	// 2. Validação Contábil de cada conta envolvida
+	// 2. Validação Contábil e de Isolamento Multi-tenant de cada conta
 	for _, line := range entry.Lines {
 		acc, err := s.accountRepo.GetByID(ctx, line.AccountID)
 		if err != nil {
 			return nil, fmt.Errorf("conta %s inválida: %w", line.AccountID, err)
+		}
+
+		if acc.CompanyID != companyID {
+			return nil, fmt.Errorf("a conta %s pertence a outra empresa: %w", acc.Code, domain.ErrMismatchedCompanyTenant)
 		}
 
 		if !acc.Active {
@@ -116,13 +130,11 @@ func (s *JournalService) CreateEntry(ctx context.Context, input CreateJournalEnt
 }
 
 // CreateBatchEntries processa uma lista de lançamentos contábeis de forma concorrente e otimizada
-// Ideal para fechamentos mensais de escritórios contábeis envolvendo milhares de lançamentos.
-func (s *JournalService) CreateBatchEntries(ctx context.Context, entries []CreateJournalEntryInput) *BatchProcessReport {
+func (s *JournalService) CreateBatchEntries(ctx context.Context, companyID uuid.UUID, entries []CreateJournalEntryInput) *BatchProcessReport {
 	startTime := time.Now()
 	total := len(entries)
 	results := make([]BatchItemResult, total)
 
-	// Worker pool concorrente com controle de paralelismo
 	concurrencyLimit := 10
 	semaphore := make(chan struct{}, concurrencyLimit)
 	var wg sync.WaitGroup
@@ -134,7 +146,7 @@ func (s *JournalService) CreateBatchEntries(ctx context.Context, entries []Creat
 			semaphore <- struct{}{}
 			defer func() { <-semaphore }()
 
-			entry, err := s.CreateEntry(ctx, input)
+			entry, err := s.CreateEntry(ctx, companyID, input)
 			if err != nil {
 				results[idx] = BatchItemResult{
 					Index:   idx,
@@ -182,4 +194,3 @@ func (s *JournalService) GetByID(ctx context.Context, id uuid.UUID) (*domain.Jou
 func (s *JournalService) ListEntries(ctx context.Context, f postgres.ListFilter) ([]domain.JournalEntry, int, error) {
 	return s.journalRepo.List(ctx, f)
 }
-

@@ -24,6 +24,72 @@ paths:
         '503':
           description: Banco de dados inacessível
 
+  /api/v1/companies:
+    post:
+      summary: Cadastrar empresa / cliente do escritório
+      description: Registra uma nova empresa no escritório contábil (suporte a Multi-Tenancy). Opcionalmente clona o plano de contas padrão.
+      tags:
+        - Empresas (Multi-Tenancy)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCompanyInput'
+      responses:
+        '201':
+          description: Empresa cadastrada com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Company'
+        '400':
+          description: CNPJ inválido ou dados incorretos
+        '409':
+          description: Empresa já cadastrada com este CNPJ
+    get:
+      summary: Listar empresas clientes
+      description: Retorna todas as empresas cadastradas no escritório de contabilidade.
+      tags:
+        - Empresas (Multi-Tenancy)
+      parameters:
+        - name: active_only
+          in: query
+          description: Se true, filtra somente empresas ativas
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Lista de empresas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Company'
+
+  /api/v1/companies/{id}:
+    get:
+      summary: Obter detalhes da empresa
+      tags:
+        - Empresas (Multi-Tenancy)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Empresa encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Company'
+        '404':
+          description: Empresa não encontrada
+
   /api/v1/accounts:
     post:
       summary: Criar conta contábil
@@ -293,6 +359,62 @@ paths:
 
 components:
   schemas:
+    CreateCompanyInput:
+      type: object
+      required:
+        - cnpj
+        - legal_name
+        - tax_regime
+      properties:
+        cnpj:
+          type: string
+          example: "03.743.085/0001-20"
+        legal_name:
+          type: string
+          example: "Agropecuária Vale do São Francisco Ltda"
+        trade_name:
+          type: string
+          example: "Agro Januária"
+        tax_regime:
+          type: string
+          enum: [SIMPLES_NACIONAL, LUCRO_PRESUMIDO, LUCRO_REAL, MEI]
+        city:
+          type: string
+          example: "Januária"
+        state:
+          type: string
+          example: "MG"
+        clone_default_accounts:
+          type: boolean
+          default: true
+          description: Se true, replica toda a estrutura hierárquica do plano de contas referencial padrão para esta nova empresa
+
+    Company:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        cnpj:
+          type: string
+        legal_name:
+          type: string
+        trade_name:
+          type: string
+        tax_regime:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
     CreateAccountInput:
       type: object
       required:

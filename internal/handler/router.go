@@ -15,6 +15,7 @@ import (
 // SetupRouter configura as rotas e middlewares da aplicação HTTP
 func SetupRouter(
 	db *postgres.DB,
+	companyHandler *CompanyHandler,
 	accountHandler *AccountHandler,
 	journalHandler *JournalHandler,
 	reportHandler *ReportHandler,
@@ -32,8 +33,8 @@ func SetupRouter(
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Request-ID"},
-		ExposedHeaders:   []string{"Link", "X-Request-ID"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Request-ID", "X-Company-ID"},
+		ExposedHeaders:   []string{"Link", "X-Request-ID", "X-Company-ID"},
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
@@ -95,30 +96,63 @@ func SetupRouter(
 
 	// Agrupamento da API v1
 	r.Route("/api/v1", func(api chi.Router) {
-		// Rotas do Plano de Contas
-		api.Route("/accounts", func(acc chi.Router) {
-			acc.Post("/", accountHandler.Create)
-			acc.Get("/", accountHandler.List)
-			acc.Get("/{id}", accountHandler.GetByID)
-			acc.Get("/code/{code}", accountHandler.GetByCode)
+		// Rotas de Empresas / Clientes do Escritório
+		api.Route("/companies", func(comp chi.Router) {
+			comp.Post("/", companyHandler.Create)
+			comp.Get("/", companyHandler.List)
+			comp.Get("/{id}", companyHandler.GetByID)
+
+			// Rotas de contas e lançamentos com companyId explícito na URL
+			comp.Route("/{companyId}", func(sub chi.Router) {
+				sub.Use(middleware.TenantMiddleware)
+
+				sub.Route("/accounts", func(acc chi.Router) {
+					acc.Post("/", accountHandler.Create)
+					acc.Get("/", accountHandler.List)
+					acc.Get("/{id}", accountHandler.GetByID)
+					acc.Get("/code/{code}", accountHandler.GetByCode)
+				})
+
+				sub.Route("/journal-entries", func(je chi.Router) {
+					je.Post("/", journalHandler.Create)
+					je.Post("/batch", journalHandler.CreateBatch)
+					je.Get("/", journalHandler.List)
+					je.Get("/{id}", journalHandler.GetByID)
+				})
+
+				sub.Route("/reports", func(rep chi.Router) {
+					rep.Get("/ledger", reportHandler.GetLedger)
+					rep.Get("/journal", reportHandler.GetDailyBook)
+					rep.Get("/trial-balance", reportHandler.GetTrialBalance)
+				})
+			})
 		})
 
-		// Rotas de Lançamentos Contábeis
-		api.Route("/journal-entries", func(je chi.Router) {
-			je.Post("/", journalHandler.Create)
-			je.Post("/batch", journalHandler.CreateBatch)
-			je.Get("/", journalHandler.List)
-			je.Get("/{id}", journalHandler.GetByID)
-		})
+		// Rotas de conveniência utilizando X-Company-ID no Header ou query param
+		api.Group(func(tenantGroup chi.Router) {
+			tenantGroup.Use(middleware.TenantMiddleware)
 
-		// Rotas de Relatórios Contábeis e Livros Oficiais
-		api.Route("/reports", func(rep chi.Router) {
-			rep.Get("/ledger", reportHandler.GetLedger)
-			rep.Get("/journal", reportHandler.GetDailyBook)
-			rep.Get("/trial-balance", reportHandler.GetTrialBalance)
+			tenantGroup.Route("/accounts", func(acc chi.Router) {
+				acc.Post("/", accountHandler.Create)
+				acc.Get("/", accountHandler.List)
+				acc.Get("/{id}", accountHandler.GetByID)
+				acc.Get("/code/{code}", accountHandler.GetByCode)
+			})
+
+			tenantGroup.Route("/journal-entries", func(je chi.Router) {
+				je.Post("/", journalHandler.Create)
+				je.Post("/batch", journalHandler.CreateBatch)
+				je.Get("/", journalHandler.List)
+				je.Get("/{id}", journalHandler.GetByID)
+			})
+
+			tenantGroup.Route("/reports", func(rep chi.Router) {
+				rep.Get("/ledger", reportHandler.GetLedger)
+				rep.Get("/journal", reportHandler.GetDailyBook)
+				rep.Get("/trial-balance", reportHandler.GetTrialBalance)
+			})
 		})
 	})
 
 	return r
 }
-

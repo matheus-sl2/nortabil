@@ -49,13 +49,13 @@ func JSONError(w http.ResponseWriter, statusCode int, errorCode, message string,
 // HandleDomainError mapeia erros de domínio contábil para o status HTTP e mensagem adequados
 func HandleDomainError(w http.ResponseWriter, err error) {
 	switch {
-	case errors.Is(err, domain.ErrUnbalancedJournalEntry):
+	case errors.Is(err, domain.ErrUnbalancedJournalEntry), errors.Is(err, domain.ErrMismatchedCompanyTenant):
 		JSONError(w, http.StatusUnprocessableEntity, "UNBALANCED_ENTRY", err.Error(), nil)
 	case errors.Is(err, domain.ErrSyntheticAccountPostNotAllowed):
 		JSONError(w, http.StatusUnprocessableEntity, "SYNTHETIC_ACCOUNT_NOT_ALLOWED", err.Error(), nil)
-	case errors.Is(err, domain.ErrAccountNotFound), errors.Is(err, domain.ErrParentAccountNotFound):
+	case errors.Is(err, domain.ErrAccountNotFound), errors.Is(err, domain.ErrParentAccountNotFound), errors.Is(err, domain.ErrCompanyNotFound):
 		JSONError(w, http.StatusNotFound, "NOT_FOUND", err.Error(), nil)
-	case errors.Is(err, domain.ErrAccountAlreadyExists):
+	case errors.Is(err, domain.ErrAccountAlreadyExists), errors.Is(err, domain.ErrCompanyAlreadyExists):
 		JSONError(w, http.StatusConflict, "ALREADY_EXISTS", err.Error(), nil)
 	case errors.Is(err, domain.ErrEmptyJournalLines),
 		errors.Is(err, domain.ErrZeroOrNegativeAmount),
@@ -65,6 +65,8 @@ func HandleDomainError(w http.ResponseWriter, err error) {
 		errors.Is(err, domain.ErrInvalidAccountCode),
 		errors.Is(err, domain.ErrInvalidDateRange),
 		errors.Is(err, domain.ErrInactiveAccount),
+		errors.Is(err, domain.ErrInvalidCNPJ),
+		errors.Is(err, domain.ErrInvalidTaxRegime),
 		errors.Is(err, domain.ErrParentAccountMustBeSynthetic),
 		errors.Is(err, domain.ErrAccountHasEntriesCannotBeSynthetic):
 		JSONError(w, http.StatusBadRequest, "BAD_REQUEST", err.Error(), nil)

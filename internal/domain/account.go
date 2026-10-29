@@ -29,6 +29,7 @@ const (
 // Account representa uma conta do Plano de Contas
 type Account struct {
 	ID          uuid.UUID     `json:"id"`
+	CompanyID   uuid.UUID     `json:"company_id"`   // Identificador da empresa proprietária da conta (Multi-tenant)
 	Code        string        `json:"code"`         // Ex: "1.1.01.001"
 	Name        string        `json:"name"`         // Ex: "Caixa Geral"
 	Type        AccountType   `json:"type"`         // ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE

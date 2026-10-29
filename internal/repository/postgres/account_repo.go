@@ -21,21 +21,25 @@ func NewAccountRepository(db *DB) *AccountRepository {
 	return &AccountRepository{db: db}
 }
 
-// Create insere uma nova conta contábil
+// Create insere uma nova conta contábil associada a uma empresa
 func (r *AccountRepository) Create(ctx context.Context, acc *domain.Account) error {
 	query := `
-		INSERT INTO account (id, code, name, type, nature, is_synthetic, parent_id, active, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		INSERT INTO account (id, company_id, code, name, type, nature, is_synthetic, parent_id, active, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 	`
 	now := time.Now()
 	if acc.ID == uuid.Nil {
 		acc.ID = uuid.New()
+	}
+	if acc.CompanyID == uuid.Nil {
+		acc.CompanyID = domain.DefaultCompanyID
 	}
 	acc.CreatedAt = now
 	acc.UpdatedAt = now
 
 	_, err := r.db.Pool.Exec(ctx, query,
 		acc.ID,
+		acc.CompanyID,
 		acc.Code,
 		acc.Name,
 		acc.Type,
@@ -56,13 +60,14 @@ func (r *AccountRepository) Create(ctx context.Context, acc *domain.Account) err
 // GetByID busca uma conta pelo seu identificador único UUID
 func (r *AccountRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Account, error) {
 	query := `
-		SELECT id, code, name, type, nature, is_synthetic, parent_id, active, created_at, updated_at
+		SELECT id, company_id, code, name, type, nature, is_synthetic, parent_id, active, created_at, updated_at
 		FROM account
 		WHERE id = $1
 	`
 	var acc domain.Account
 	err := r.db.Pool.QueryRow(ctx, query, id).Scan(
 		&acc.ID,
+		&acc.CompanyID,
 		&acc.Code,
 		&acc.Name,
 		&acc.Type,
@@ -83,16 +88,20 @@ func (r *AccountRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.
 	return &acc, nil
 }
 
-// GetByCode busca uma conta pelo código estruturado (ex: "1.1.01.001")
-func (r *AccountRepository) GetByCode(ctx context.Context, code string) (*domain.Account, error) {
+// GetByCode busca uma conta pelo código estruturado e pela empresa
+func (r *AccountRepository) GetByCode(ctx context.Context, companyID uuid.UUID, code string) (*domain.Account, error) {
+	if companyID == uuid.Nil {
+		companyID = domain.DefaultCompanyID
+	}
 	query := `
-		SELECT id, code, name, type, nature, is_synthetic, parent_id, active, created_at, updated_at
+		SELECT id, company_id, code, name, type, nature, is_synthetic, parent_id, active, created_at, updated_at
 		FROM account
-		WHERE code = $1
+		WHERE company_id = $1 AND code = $2
 	`
 	var acc domain.Account
-	err := r.db.Pool.QueryRow(ctx, query, code).Scan(
+	err := r.db.Pool.QueryRow(ctx, query, companyID, code).Scan(
 		&acc.ID,
+		&acc.CompanyID,
 		&acc.Code,
 		&acc.Name,
 		&acc.Type,
@@ -113,18 +122,22 @@ func (r *AccountRepository) GetByCode(ctx context.Context, code string) (*domain
 	return &acc, nil
 }
 
-// List retorna todas as contas ordenadas pelo código hierárquico
-func (r *AccountRepository) List(ctx context.Context, activeOnly bool) ([]domain.Account, error) {
+// List retorna todas as contas de uma empresa ordenadas pelo código hierárquico
+func (r *AccountRepository) List(ctx context.Context, companyID uuid.UUID, activeOnly bool) ([]domain.Account, error) {
+	if companyID == uuid.Nil {
+		companyID = domain.DefaultCompanyID
+	}
 	query := `
-		SELECT id, code, name, type, nature, is_synthetic, parent_id, active, created_at, updated_at
+		SELECT id, company_id, code, name, type, nature, is_synthetic, parent_id, active, created_at, updated_at
 		FROM account
+		WHERE company_id = $1
 	`
 	if activeOnly {
-		query += " WHERE active = TRUE"
+		query += " AND active = TRUE"
 	}
 	query += " ORDER BY code ASC"
 
-	rows, err := r.db.Pool.Query(ctx, query)
+	rows, err := r.db.Pool.Query(ctx, query, companyID)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao listar contas contábeis: %w", err)
 	}
@@ -135,6 +148,7 @@ func (r *AccountRepository) List(ctx context.Context, activeOnly bool) ([]domain
 		var acc domain.Account
 		if err := rows.Scan(
 			&acc.ID,
+			&acc.CompanyID,
 			&acc.Code,
 			&acc.Name,
 			&acc.Type,
@@ -181,4 +195,3 @@ func (r *AccountRepository) SetSynthetic(ctx context.Context, id uuid.UUID, isSy
 	_, err := r.db.Pool.Exec(ctx, query, isSynthetic, id)
 	return err
 }
-

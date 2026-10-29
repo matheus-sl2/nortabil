@@ -49,5 +49,20 @@ var (
 
 	// ErrInvalidDateRange ocorre quando o intervalo de datas de um relatório contábil é inconsistente.
 	ErrInvalidDateRange = errors.New("intervalo de datas inválido: a data inicial não pode ser superior à data final")
+
+	// ErrCompanyNotFound ocorre quando a empresa solicitada não foi localizada.
+	ErrCompanyNotFound = errors.New("empresa cliente não encontrada")
+
+	// ErrCompanyAlreadyExists ocorre quando já existe uma empresa com o CNPJ informado.
+	ErrCompanyAlreadyExists = errors.New("já existe uma empresa cadastrada com este CNPJ")
+
+	// ErrInvalidCNPJ ocorre quando o CNPJ informado possui formato ou dígitos verificadores inválidos.
+	ErrInvalidCNPJ = errors.New("CNPJ inválido: falha na validação de dígitos verificadores da Receita Federal")
+
+	// ErrInvalidTaxRegime ocorre quando o regime tributário informado não é suportado.
+	ErrInvalidTaxRegime = errors.New("regime tributário inválido (permitidos: SIMPLES_NACIONAL, LUCRO_PRESUMIDO, LUCRO_REAL, MEI)")
+
+	// ErrMismatchedCompanyTenant ocorre quando há tentativa de misturar contas ou lançamentos de empresas diferentes.
+	ErrMismatchedCompanyTenant = errors.New("violação de isolamento multi-tenant: contas pertencem a empresas distintas")
 )
 

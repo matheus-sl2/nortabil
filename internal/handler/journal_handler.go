@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/matheus-sl2/nortabil/internal/middleware"
 	"github.com/matheus-sl2/nortabil/internal/repository/postgres"
 	"github.com/matheus-sl2/nortabil/internal/service"
 )
@@ -23,13 +24,6 @@ func NewJournalHandler(service *service.JournalService) *JournalHandler {
 }
 
 // Create cria um lançamento contábil individual aplicando a Lei de Luca Pacioli
-// @Summary Criar lançamento contábil
-// @Description Registra um novo fato contábil validando a igualdade estrita entre Débitos e Créditos
-// @Tags Lançamentos
-// @Accept json
-// @Produce json
-// @Success 201 {object} domain.JournalEntry
-// @Router /api/v1/journal-entries [post]
 func (h *JournalHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var input service.CreateJournalEntryInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
@@ -37,7 +31,8 @@ func (h *JournalHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	entry, err := h.service.CreateEntry(r.Context(), input)
+	companyID := middleware.GetCompanyID(r)
+	entry, err := h.service.CreateEntry(r.Context(), companyID, input)
 	if err != nil {
 		HandleDomainError(w, err)
 		return
@@ -47,13 +42,6 @@ func (h *JournalHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 // CreateBatch processa uma lista de lançamentos contábeis de alta vazão
-// @Summary Criar lote de lançamentos contábeis
-// @Description Recebe centenas ou milhares de lançamentos em lote com processamento concorrente
-// @Tags Lançamentos
-// @Accept json
-// @Produce json
-// @Success 200 {object} service.BatchProcessReport
-// @Router /api/v1/journal-entries/batch [post]
 func (h *JournalHandler) CreateBatch(w http.ResponseWriter, r *http.Request) {
 	var input []service.CreateJournalEntryInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
@@ -61,17 +49,12 @@ func (h *JournalHandler) CreateBatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	report := h.service.CreateBatchEntries(r.Context(), input)
+	companyID := middleware.GetCompanyID(r)
+	report := h.service.CreateBatchEntries(r.Context(), companyID, input)
 	JSON(w, http.StatusOK, report)
 }
 
 // GetByID busca um lançamento pelo ID UUID
-// @Summary Obter lançamento por ID
-// @Tags Lançamentos
-// @Produce json
-// @Param id path string true "UUID do lançamento"
-// @Success 200 {object} domain.JournalEntry
-// @Router /api/v1/journal-entries/{id} [get]
 func (h *JournalHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	idParam := chi.URLParam(r, "id")
 	id, err := uuid.Parse(idParam)
@@ -90,22 +73,14 @@ func (h *JournalHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 }
 
 // List lista lançamentos com filtros e paginação
-// @Summary Listar lançamentos contábeis
-// @Tags Lançamentos
-// @Produce json
-// @Param start_date query string false "Data inicial (YYYY-MM-DD)"
-// @Param end_date query string false "Data final (YYYY-MM-DD)"
-// @Param status query string false "Status (POSTED, DRAFT, REVERSED)"
-// @Param limit query int false "Limite por página (padrão: 50)"
-// @Param offset query int false "Deslocamento de página"
-// @Success 200 {array} domain.JournalEntry
-// @Router /api/v1/journal-entries [get]
 func (h *JournalHandler) List(w http.ResponseWriter, r *http.Request) {
+	companyID := middleware.GetCompanyID(r)
 	q := r.URL.Query()
 	filter := postgres.ListFilter{
-		Status: q.Get("status"),
-		Limit:  50,
-		Offset: 0,
+		CompanyID: companyID,
+		Status:    q.Get("status"),
+		Limit:     50,
+		Offset:    0,
 	}
 
 	if l := q.Get("limit"); l != "" {
@@ -144,4 +119,3 @@ func (h *JournalHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	JSON(w, http.StatusOK, response)
 }
-

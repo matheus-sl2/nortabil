@@ -17,6 +17,9 @@ var migration001 string
 //go:embed migrations/002_seed_accounts.sql
 var migration002 string
 
+//go:embed migrations/003_add_multi_tenancy.sql
+var migration003 string
+
 // DB encapsula o pool de conexões pgxpool
 type DB struct {
 	Pool *pgxpool.Pool
@@ -77,6 +80,11 @@ func (db *DB) RunMigrations(ctx context.Context, autoSeed bool) error {
 		if _, err := db.Pool.Exec(ctx, migration002); err != nil {
 			return fmt.Errorf("erro na migração 002 (seed): %w", err)
 		}
+	}
+
+	log.Println("[MIGRAÇÃO] Aplicando suporte a Multi-Tenancy (003_add_multi_tenancy.sql)...")
+	if _, err := db.Pool.Exec(ctx, migration003); err != nil {
+		return fmt.Errorf("erro na migração 003 (multi-tenancy): %w", err)
 	}
 
 	log.Println("[MIGRAÇÃO] Esquema e tabelas verificados com sucesso.")

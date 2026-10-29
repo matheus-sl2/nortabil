@@ -41,6 +41,7 @@ type JournalLine struct {
 // JournalEntry representa o cabeçalho de um lançamento contábil no Livro Diário
 type JournalEntry struct {
 	ID          uuid.UUID       `json:"id"`
+	CompanyID   uuid.UUID       `json:"company_id"`   // Identificador da empresa proprietária (Multi-tenant)
 	EntryNumber int64           `json:"entry_number"` // Número de ordem cronológica no Diário
 	Date        time.Time       `json:"date"`         // Data de competência do fato contábil
 	Description string          `json:"description"`  // Histórico da operação (Resolução CFC ITG 2000)

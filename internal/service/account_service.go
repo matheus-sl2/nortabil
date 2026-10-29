@@ -21,6 +21,7 @@ func NewAccountService(repo *postgres.AccountRepository) *AccountService {
 
 // CreateAccountInput dados de entrada para criação de conta contábil
 type CreateAccountInput struct {
+	CompanyID   *uuid.UUID         `json:"company_id,omitempty"`
 	Code        string             `json:"code"`
 	Name        string             `json:"name"`
 	Type        domain.AccountType `json:"type"`
@@ -28,8 +29,16 @@ type CreateAccountInput struct {
 	ParentID    *uuid.UUID         `json:"parent_id,omitempty"`
 }
 
-// CreateAccount valida e persiste uma nova conta contábil no plano de contas
-func (s *AccountService) CreateAccount(ctx context.Context, input CreateAccountInput) (*domain.Account, error) {
+// CreateAccount valida e persiste uma nova conta contábil no plano de contas da empresa
+func (s *AccountService) CreateAccount(ctx context.Context, companyID uuid.UUID, input CreateAccountInput) (*domain.Account, error) {
+	if companyID == uuid.Nil {
+		if input.CompanyID != nil && *input.CompanyID != uuid.Nil {
+			companyID = *input.CompanyID
+		} else {
+			companyID = domain.DefaultCompanyID
+		}
+	}
+
 	input.Code = domain.NormalizeAccountCode(input.Code)
 	input.Name = strings.TrimSpace(input.Name)
 
@@ -43,8 +52,8 @@ func (s *AccountService) CreateAccount(ctx context.Context, input CreateAccountI
 		return nil, domain.ErrInvalidAccountType
 	}
 
-	// 1. Verifica se já existe conta com este código
-	existing, err := s.repo.GetByCode(ctx, input.Code)
+	// 1. Verifica se já existe conta com este código para esta empresa específica
+	existing, err := s.repo.GetByCode(ctx, companyID, input.Code)
 	if err == nil && existing != nil {
 		return nil, domain.ErrAccountAlreadyExists
 	}
@@ -54,6 +63,10 @@ func (s *AccountService) CreateAccount(ctx context.Context, input CreateAccountI
 		parent, err := s.repo.GetByID(ctx, *input.ParentID)
 		if err != nil {
 			return nil, domain.ErrParentAccountNotFound
+		}
+
+		if parent.CompanyID != companyID {
+			return nil, domain.ErrMismatchedCompanyTenant
 		}
 
 		// Se a conta pai ainda não é sintética, devemos verificar se ela possui lançamentos
@@ -71,7 +84,6 @@ func (s *AccountService) CreateAccount(ctx context.Context, input CreateAccountI
 			}
 		}
 
-		// Força o mesmo tipo da conta pai (ex: Ativo filho de Ativo)
 		input.Type = parent.Type
 	}
 
@@ -79,6 +91,7 @@ func (s *AccountService) CreateAccount(ctx context.Context, input CreateAccountI
 
 	acc := &domain.Account{
 		ID:          uuid.New(),
+		CompanyID:   companyID,
 		Code:        input.Code,
 		Name:        input.Name,
 		Type:        input.Type,
@@ -100,19 +113,29 @@ func (s *AccountService) GetByID(ctx context.Context, id uuid.UUID) (*domain.Acc
 	return s.repo.GetByID(ctx, id)
 }
 
-// GetByCode busca conta por código estruturado
-func (s *AccountService) GetByCode(ctx context.Context, code string) (*domain.Account, error) {
-	return s.repo.GetByCode(ctx, domain.NormalizeAccountCode(code))
+// GetByCode busca conta por código estruturado dentro da empresa
+func (s *AccountService) GetByCode(ctx context.Context, companyID uuid.UUID, code string) (*domain.Account, error) {
+	if companyID == uuid.Nil {
+		companyID = domain.DefaultCompanyID
+	}
+	return s.repo.GetByCode(ctx, companyID, domain.NormalizeAccountCode(code))
 }
 
-// ListAccounts lista todas as contas
-func (s *AccountService) ListAccounts(ctx context.Context, activeOnly bool) ([]domain.Account, error) {
-	return s.repo.List(ctx, activeOnly)
+// ListAccounts lista todas as contas da empresa
+func (s *AccountService) ListAccounts(ctx context.Context, companyID uuid.UUID, activeOnly bool) ([]domain.Account, error) {
+	if companyID == uuid.Nil {
+		companyID = domain.DefaultCompanyID
+	}
+	return s.repo.List(ctx, companyID, activeOnly)
 }
 
-// GetAccountTree monta a representação hierárquica em árvore de todo o Plano de Contas
-func (s *AccountService) GetAccountTree(ctx context.Context) ([]*domain.AccountTreeNode, error) {
-	accounts, err := s.repo.List(ctx, false)
+// GetAccountTree monta a representação hierárquica em árvore do Plano de Contas da empresa
+func (s *AccountService) GetAccountTree(ctx context.Context, companyID uuid.UUID) ([]*domain.AccountTreeNode, error) {
+	if companyID == uuid.Nil {
+		companyID = domain.DefaultCompanyID
+	}
+
+	accounts, err := s.repo.List(ctx, companyID, false)
 	if err != nil {
 		return nil, err
 	}
@@ -143,4 +166,3 @@ func (s *AccountService) GetAccountTree(ctx context.Context) ([]*domain.AccountT
 
 	return rootNodes, nil
 }
-
