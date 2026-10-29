@@ -33,10 +33,9 @@ func BenchmarkLucaPacioliValidation(b *testing.B) {
 		},
 	}
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if err := entry.ValidateDoubleEntry(); err != nil {
 			b.Fatalf("Falha inesperada na validação: %v", err)
 		}
@@ -73,10 +72,9 @@ func BenchmarkComplexEntryValidation(b *testing.B) {
 		},
 	}
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if err := entry.ValidateDoubleEntry(); err != nil {
 			b.Fatalf("Falha inesperada na validação composta: %v", err)
 		}

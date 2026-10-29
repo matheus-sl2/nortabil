@@ -35,8 +35,13 @@ func TestPeriodStatusAndValidation(t *testing.T) {
 	period.ClosedAt = &now
 	period.ClosedBy = "Contador Responsável CRC/MG 12345"
 
-	if period.Status != domain.PeriodStatusClosed {
-		t.Fatalf("O período deveria estar com status CLOSED")
+	if period.ID == uuid.Nil || period.CompanyID != companyID || period.Year != year || period.Month != month ||
+		period.StartDate.IsZero() || period.EndDate.IsZero() {
+		t.Fatalf("Metadados do período contábil inválidos: %+v", period)
+	}
+
+	if period.Status != domain.PeriodStatusClosed || period.ClosedAt == nil || period.ClosedBy == "" {
+		t.Fatalf("O período deveria estar com status CLOSED e metadados de fechamento preenchidos")
 	}
 }
 

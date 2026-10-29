@@ -524,9 +524,10 @@ func (r *ReportRepository) GetDREReport(ctx context.Context, companyID uuid.UUID
 			// Provisão IRPJ / CSLL
 			dre.IncomeTaxProvision = dre.IncomeTaxProvision.Add(debitMinusCredit)
 		default:
-			if acc.Type == domain.AccountTypeRevenue {
+			switch acc.Type {
+			case domain.AccountTypeRevenue:
 				dre.GrossRevenue = dre.GrossRevenue.Add(creditMinusDebit)
-			} else if acc.Type == domain.AccountTypeExpense {
+			case domain.AccountTypeExpense:
 				dre.OperatingExpenses = dre.OperatingExpenses.Add(debitMinusCredit)
 			}
 		}

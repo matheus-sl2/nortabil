@@ -47,8 +47,24 @@ func TestExportCSVCreatesBOMAndSemicolon(t *testing.T) {
 		t.Errorf("Valor formatado incorretamente: esperado '5000,75', obteve '%s'", valStr)
 	}
 
-	if company.City != "Januária" {
-		t.Errorf("Cidade incorreta: %s", company.City)
+	if company.ID == uuid.Nil || company.CNPJ == "" || company.LegalName == "" || company.City != "Januária" || company.State != "MG" {
+		t.Errorf("Dados cadastrais da empresa inconsistentes: %+v", company)
+	}
+
+	if !report.IsBalanced || report.StartDate.IsZero() || report.EndDate.IsZero() || report.GeneratedAt.IsZero() {
+		t.Errorf("Metadados do balancete inconsistentes: %+v", report)
+	}
+
+	if !report.TotalPeriodDebit.Equal(decimal.NewFromFloat(15000.00)) ||
+		!report.TotalPeriodCredit.Equal(decimal.NewFromFloat(9999.25)) ||
+		!report.TotalDebtorBalance.Equal(decimal.NewFromFloat(5000.75)) {
+		t.Errorf("Totais do balancete inconsistentes")
+	}
+
+	item := report.Items[0]
+	if item.AccountCode != "1.1.01.002" || item.AccountName == "" || item.IsSynthetic ||
+		item.FinalNature != domain.AccountNatureDebit || !item.PeriodDebit.IsPositive() || !item.PeriodCredit.IsPositive() {
+		t.Errorf("Item do balancete inconsistente: %+v", item)
 	}
 }
 
