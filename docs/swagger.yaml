@@ -1,0 +1,451 @@
+openapi: 3.0.3
+info:
+  title: Nortabil - Motor de Partidas Dobradas (Núcleo ERP Contábil)
+  description: |
+    API de altíssimo desempenho para processamento de transações contábeis em partidas dobradas.
+    Desenvolvida em Go com PostgreSQL para garantir estrita conformidade com a Lei de Luca Pacioli,
+    Lei das S.A. (Lei 6.404/76), Código Civil (Lei 10.406/2002) e Resolução CFC ITG 2000.
+    Projetada com foco nos escritórios de contabilidade do Norte de Minas Gerais (Januária, Montes Claros e região).
+  version: 1.0.0
+  contact:
+    name: Projeto Nortabil
+    url: https://github.com/matheus-sl2/nortabil
+servers:
+  - url: http://localhost:8080
+    description: Servidor Local de Desenvolvimento
+paths:
+  /healthz:
+    get:
+      summary: Verificação de saúde da aplicação
+      description: Retorna o status operacional da API e a conectividade com o PostgreSQL.
+      responses:
+        '200':
+          description: Serviço saudável e operacional
+        '503':
+          description: Banco de dados inacessível
+
+  /api/v1/accounts:
+    post:
+      summary: Criar conta contábil
+      description: Registra uma nova conta no plano de contas (sintética ou analítica).
+      tags:
+        - Contas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAccountInput'
+      responses:
+        '201':
+          description: Conta criada com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '400':
+          description: Dados inválidos no cadastro
+        '409':
+          description: Código contábil já existente
+    get:
+      summary: Listar plano de contas
+      description: Retorna as contas cadastradas. Suporta exibição em árvore hierárquica ou plana.
+      tags:
+        - Contas
+      parameters:
+        - name: tree
+          in: query
+          description: Se true, retorna a estrutura organizada em árvore com nós pais e filhos
+          schema:
+            type: boolean
+        - name: active_only
+          in: query
+          description: Se true, filtra somente contas ativas
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Lista ou árvore de contas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Account'
+
+  /api/v1/accounts/{id}:
+    get:
+      summary: Obter conta por ID
+      tags:
+        - Contas
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Conta encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '404':
+          description: Conta não encontrada
+
+  /api/v1/accounts/code/{code}:
+    get:
+      summary: Obter conta por código estruturado
+      tags:
+        - Contas
+      parameters:
+        - name: code
+          in: path
+          required: true
+          example: "1.1.01.001"
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Conta encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '404':
+          description: Conta não encontrada
+
+  /api/v1/journal-entries:
+    post:
+      summary: Registrar lançamento contábil
+      description: |
+        Registra um lançamento no Livro Diário com partidas dobradas.
+        Aplica a Lei de Luca Pacioli: a soma dos débitos deve ser estritamente igual à dos créditos.
+        Exige contas analíticas e ativas.
+      tags:
+        - Lançamentos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateJournalEntryInput'
+      responses:
+        '201':
+          description: Lançamento registrado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalEntry'
+        '400':
+          description: Partidas inválidas ou valores negativos
+        '422':
+          description: Desbalanceamento de partidas dobradas ou uso de conta sintética
+    get:
+      summary: Listar lançamentos contábeis
+      description: Consulta o histórico de lançamentos com suporte a período e paginação.
+      tags:
+        - Lançamentos
+      parameters:
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [POSTED, DRAFT, REVERSED]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Lista paginada de lançamentos
+
+  /api/v1/journal-entries/batch:
+    post:
+      summary: Lote de lançamentos contábeis
+      description: Ingestão massiva em alta velocidade com concorrência para fechamentos contábeis mensais.
+      tags:
+        - Lançamentos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/CreateJournalEntryInput'
+      responses:
+        '200':
+          description: Relatório do processamento em lote
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchProcessReport'
+
+  /api/v1/journal-entries/{id}:
+    get:
+      summary: Obter lançamento completo por ID
+      tags:
+        - Lançamentos
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Lançamento completo com partidas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalEntry'
+        '404':
+          description: Lançamento não encontrado
+
+  /api/v1/reports/ledger:
+    get:
+      summary: Gerar Livro Razão
+      description: Emite o Livro Razão contábil detalhado por conta com saldo anterior, movimentações cronológicas e saldo final.
+      tags:
+        - Relatórios Legais
+      parameters:
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: account_id
+          in: query
+          description: UUID opcional de conta analítica específica
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Relatório do Livro Razão
+
+  /api/v1/reports/journal:
+    get:
+      summary: Gerar Livro Diário Geral
+      description: Emite a relação cronológica de todas as operações contábeis no período.
+      tags:
+        - Relatórios Legais
+      parameters:
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Relatório do Livro Diário Geral
+
+  /api/v1/reports/trial-balance:
+    get:
+      summary: Gerar Balancete de Verificação
+      description: Emite o balancete analítico e sintético para conferência do equilíbrio patrimonial.
+      tags:
+        - Relatórios Legais
+      parameters:
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Balancete de Verificação
+
+components:
+  schemas:
+    CreateAccountInput:
+      type: object
+      required:
+        - code
+        - name
+        - type
+      properties:
+        code:
+          type: string
+          example: "1.1.01.004"
+        name:
+          type: string
+          example: "Banco Cooperativo Sicoob"
+        type:
+          type: string
+          enum: [ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE]
+        is_synthetic:
+          type: boolean
+          default: false
+        parent_id:
+          type: string
+          format: uuid
+
+    Account:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum: [ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE]
+        nature:
+          type: string
+          enum: [DEBIT, CREDIT]
+        is_synthetic:
+          type: boolean
+        parent_id:
+          type: string
+          format: uuid
+        active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateJournalLineInput:
+      type: object
+      required:
+        - account_id
+        - type
+        - amount
+      properties:
+        account_id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [DEBIT, CREDIT]
+        amount:
+          type: string
+          example: "1500.00"
+        description:
+          type: string
+
+    CreateJournalEntryInput:
+      type: object
+      required:
+        - date
+        - description
+        - lines
+      properties:
+        date:
+          type: string
+          format: date-time
+          example: "2026-10-29T10:00:00Z"
+        description:
+          type: string
+          example: "Recebimento de duplicata via Banco do Brasil"
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreateJournalLineInput'
+
+    JournalLine:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        journal_entry_id:
+          type: string
+          format: uuid
+        account_id:
+          type: string
+          format: uuid
+        account_code:
+          type: string
+        account_name:
+          type: string
+        type:
+          type: string
+          enum: [DEBIT, CREDIT]
+        amount:
+          type: string
+        description:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    JournalEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        entry_number:
+          type: integer
+        date:
+          type: string
+          format: date
+        description:
+          type: string
+        status:
+          type: string
+        total_debit:
+          type: string
+        total_credit:
+          type: string
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/JournalLine'
+        created_at:
+          type: string
+          format: date-time
+
+    BatchProcessReport:
+      type: object
+      properties:
+        total_processed:
+          type: integer
+        total_success:
+          type: integer
+        total_failed:
+          type: integer
+        duration_ms:
+          type: integer

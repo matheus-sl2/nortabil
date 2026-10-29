@@ -1,0 +1,27 @@
+# Binários e builds
+/bin/
+/dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Testes e cobertura
+*.out
+*.test
+coverage.html
+
+# IDEs e editores
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Variáveis de ambiente
+.env
+.env.local
+
+# Docker volumes
+pgdata/
