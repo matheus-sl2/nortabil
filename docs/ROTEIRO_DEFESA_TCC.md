@@ -153,20 +153,18 @@ Get-Content sped_ecd_jaiba.txt -TotalCount 20
 **"De que forma o sistema garante a conformidade com o SPED ECD e a rastreabilidade das operações?"**
 > **Resposta:**
 > A Escrituração Contábil Digital (IN RFB 2.003/2021) exige que cada registro contábil contenha histórico completo, data cronológica estrita, numeração contínua e associação a contas referenciais analíticas.
-> O Nortabil gera os blocos 0 (Identificação da PJ e do Escritório), I (Plano de Contas I050, Lançamento I200 e Partida I250), J (Termo de Encerramento e Signatários J930 com o CRC do contador responsável) e 9 (Totalizadores de integridade 9900/9999). Cada lançamento recebe numeração sequencial contínua e carimbo de data/hora de criação.
-> *Limitação reconhecida (trabalho futuro):* a versão atual ainda não registra em cada lançamento o usuário autenticado que o originou (trilha de auditoria por usuário).
+> O Nortabil gera os blocos 0 (Identificação da PJ e do Escritório), I (Plano de Contas I050, Lançamento I200 e Partida I250), J (Termo de Encerramento e Signatários J930 com o CRC do contador responsável) e 9 (Totalizadores de integridade 9900/9999). Além disso, cada lançamento e fechamento de período registra automaticamente a trilha de auditoria (`created_by` e `closed_by`) extraída do token JWT do usuário autenticado, junto ao carimbo de data/hora de criação.
 
 ---
 
 ### Pergunta 4 (Área de Segurança e Gestão):
 **"Como o sistema protege dados sensíveis dos clientes de contabilidade contra acessos indevidos?"**
 > **Resposta:**
-> O sistema implementa o modelo de Controle de Acesso Baseado em Funções (RBAC) com três perfis:
+> O sistema implementa o modelo de Controle de Acesso Baseado em Funções (RBAC) com três perfis, integrados tanto na API quanto na interface web do Dashboard:
 > 1. `ADMIN`: Controle total, incluindo o cadastro e a listagem de usuários (rotas `/auth/register` e `/auth/users` exigem token de ADMIN);
-> 2. `CONTADOR`: Perfil do responsável técnico, com registro de CRC;
-> 3. `ASSISTENTE`: Perfil operacional de entrada de lançamentos e consulta.
+> 2. `CONTADOR`: Perfil do responsável técnico com registro de CRC, autorizado a executar o fechamento e a reabertura de períodos mensais e a Apuração do Resultado do Exercício (`POST /periods/close`, `/periods/reopen`, `/periods/closing-year`);
+> 3. `ASSISTENTE`: Perfil operacional de entrada de lançamentos e consulta a relatórios, impedido pelo middleware `RequireRole` de fechar ou reabrir períodos contábeis (recebe HTTP 403 Forbidden).
 > As senhas são hasheadas com Bcrypt (custo 10, resistente a ataques de dicionário e rainbow tables) e as requisições autenticadas via JSON Web Tokens (JWT) com assinatura HMAC-SHA256 e tempo de vida de 24 horas.
-> *Limitação reconhecida (trabalho futuro):* a hierarquia de perfis está implementada e testada (`HasPermission` / `RequireRole`), mas, nesta versão, apenas a gestão de usuários é bloqueada por perfil. Exigir login nas rotas de fechamento de período e SPED depende de adicionar uma tela de login ao dashboard.
 
 ---
 

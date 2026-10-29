@@ -213,7 +213,7 @@ O repositório inclui um guia completo com orientações minuto a minuto, comand
 * **Repositório do Projeto:** [github.com/matheus-sl2/nortabil](https://github.com/matheus-sl2/nortabil.git)
 * **Repositório de Legislação de Consulta:** [github.com/ctresb/leis](https://github.com/ctresb/leis.git)
 * **Pipeline de Integração Contínua (CI/CD):** GitHub Actions configurado em `.github/workflows/ci.yml`
-* **Interface Web Contábil:** Disponível em `http://localhost:8080/dashboard`
-* **Documentação Interativa da API (Swagger):** Disponível em `http://localhost:8080/swagger/index.html`
+* **Interface Web Contábil:** Disponível em `http://localhost:8080/`
+* **Documentação Interativa da API (Swagger):** Disponível em `http://localhost:8080/swagger`
 * **Idioma oficial de commits, documentações e comentários:** Português do Brasil (pt-BR).
 

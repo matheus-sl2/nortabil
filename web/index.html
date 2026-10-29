@@ -28,8 +28,8 @@
         </div>
       </div>
 
-      <!-- Seletor de Empresa Ativa (Multi-Tenant) -->
-      <div class="flex items-center space-x-4">
+      <!-- Seletor de Empresa Ativa (Multi-Tenant) e Sessão Autenticada (RBAC) -->
+      <div class="flex items-center space-x-3 flex-wrap gap-y-2">
         <div class="flex items-center space-x-2 bg-indigo-950/60 px-3 py-1.5 rounded-lg border border-indigo-700">
           <i class="fa-solid fa-building text-indigo-300 text-sm"></i>
           <span class="text-xs text-indigo-300 font-medium">Empresa:</span>
@@ -40,6 +40,14 @@
         <button onclick="openModal('modalNewCompany')" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition">
           <i class="fa-solid fa-plus"></i>
           <span>Nova Empresa</span>
+        </button>
+        <button id="btnManageUsers" onclick="openUsersModal()" class="hidden bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold items-center space-x-1.5 transition">
+          <i class="fa-solid fa-users-gear"></i>
+          <span>Usuários RBAC</span>
+        </button>
+        <button id="authStatusBtn" onclick="openModal('modalLogin')" class="bg-indigo-800 hover:bg-indigo-700 text-indigo-100 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-2 transition border border-indigo-600">
+          <i class="fa-solid fa-user-shield text-emerald-400"></i>
+          <span id="authUserLabel">Autenticando...</span>
         </button>
         <a href="/swagger" target="_blank" class="text-xs bg-indigo-800 hover:bg-indigo-700 text-indigo-100 px-3 py-1.5 rounded-lg transition border border-indigo-600">
           <i class="fa-solid fa-code"></i> Swagger API
@@ -679,6 +687,123 @@
         <div class="pt-3 flex justify-end space-x-2">
           <button type="button" onclick="closeModal('modalNewAccount')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-4 py-2 rounded-lg text-xs">Cancelar</button>
           <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg text-xs">Criar Conta</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Autenticação JWT & Perfis RBAC -->
+  <div id="modalLogin" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 border border-slate-200">
+      <div class="flex justify-between items-center border-b border-slate-200 pb-3 mb-4">
+        <h4 class="font-bold text-slate-800 text-sm flex items-center space-x-2">
+          <i class="fa-solid fa-user-lock text-indigo-600"></i>
+          <span>Autenticação Segura (JWT + RBAC)</span>
+        </h4>
+        <button onclick="closeModal('modalLogin')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-times"></i></button>
+      </div>
+
+      <div id="currentSessionBox" class="mb-4 p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs space-y-1">
+        <div class="font-semibold text-slate-700">Sessão Ativa: <span id="sessionUserName" class="text-indigo-700 font-bold">Não autenticado</span></div>
+        <div class="text-slate-500">E-mail: <span id="sessionUserEmail">-</span> | Perfil: <span id="sessionUserRole" class="font-mono font-bold">-</span></div>
+      </div>
+
+      <div class="mb-4">
+        <span class="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">Troca Rápida de Perfil (Demonstração TCC):</span>
+        <div class="grid grid-cols-3 gap-2">
+          <button type="button" onclick="quickLogin('contador@nortabil.com.br', 'Nortabil@2026')" class="px-2 py-2 rounded-lg border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[11px] font-bold transition text-center">
+            <i class="fa-solid fa-user-tie block mb-0.5"></i>Contador
+          </button>
+          <button type="button" onclick="quickLogin('admin@nortabil.com.br', 'Nortabil@2026')" class="px-2 py-2 rounded-lg border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 text-[11px] font-bold transition text-center">
+            <i class="fa-solid fa-user-shield block mb-0.5"></i>Admin
+          </button>
+          <button type="button" onclick="quickLogin('assistente@nortabil.com.br', 'Nortabil@2026')" class="px-2 py-2 rounded-lg border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-800 text-[11px] font-bold transition text-center">
+            <i class="fa-solid fa-user-pen block mb-0.5"></i>Assistente
+          </button>
+        </div>
+      </div>
+
+      <form onsubmit="handleLogin(event)" class="space-y-3 border-t border-slate-200 pt-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">E-mail Corporativo</label>
+          <input type="email" id="loginEmail" value="contador@nortabil.com.br" required class="w-full text-sm border border-slate-300 rounded-lg px-3 py-2" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Senha</label>
+          <input type="password" id="loginPassword" value="Nortabil@2026" required class="w-full text-sm border border-slate-300 rounded-lg px-3 py-2" />
+        </div>
+        <div class="pt-2 flex justify-between items-center">
+          <button type="button" onclick="handleLogout()" class="text-rose-600 hover:text-rose-800 text-xs font-semibold">Encerrar Sessão</button>
+          <div class="space-x-2">
+            <button type="button" onclick="closeModal('modalLogin')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-4 py-2 rounded-lg text-xs">Fechar</button>
+            <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg text-xs">Autenticar</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Gestão de Usuários RBAC (Restrito a ADMIN) -->
+  <div id="modalUsers" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6 border border-slate-200 max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center border-b border-slate-200 pb-3 mb-4">
+        <h4 class="font-bold text-slate-800 text-sm flex items-center space-x-2">
+          <i class="fa-solid fa-users-gear text-amber-600"></i>
+          <span>Gestão de Usuários e Perfis de Acesso (RBAC - Exclusivo ADMIN)</span>
+        </h4>
+        <button onclick="closeModal('modalUsers')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-times"></i></button>
+      </div>
+
+      <div class="mb-5">
+        <h5 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Usuários Cadastrados</h5>
+        <div class="overflow-x-auto border border-slate-200 rounded-lg">
+          <table class="min-w-full text-xs">
+            <thead class="bg-slate-50 text-slate-600 border-b border-slate-200">
+              <tr>
+                <th class="px-3 py-2 text-left">Nome</th>
+                <th class="px-3 py-2 text-left">E-mail</th>
+                <th class="px-3 py-2 text-left">Perfil (Role)</th>
+                <th class="px-3 py-2 text-left">CRC</th>
+              </tr>
+            </thead>
+            <tbody id="usersTableBody" class="divide-y divide-slate-100">
+              <tr><td colspan="4" class="px-3 py-4 text-center text-slate-400">Carregando usuários...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <form onsubmit="handleRegisterUser(event)" class="space-y-3 border-t border-slate-200 pt-4">
+        <h5 class="text-xs font-bold text-slate-700 uppercase tracking-wider">Cadastrar Novo Usuário no Escritório</h5>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Nome Completo</label>
+            <input type="text" id="newUserName" placeholder="Ex: Marcos Oliveira" required class="w-full text-sm border border-slate-300 rounded-lg px-3 py-2" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">E-mail</label>
+            <input type="email" id="newUserEmail" placeholder="marcos@nortabil.com.br" required class="w-full text-sm border border-slate-300 rounded-lg px-3 py-2" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Senha Inicial</label>
+            <input type="password" id="newUserPassword" placeholder="Mínimo 6 caracteres" required class="w-full text-sm border border-slate-300 rounded-lg px-3 py-2" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Perfil de Acesso (RBAC)</label>
+            <select id="newUserRole" class="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 bg-white">
+              <option value="CONTADOR">CONTADOR (Fecha períodos / ARE / SPED)</option>
+              <option value="ASSISTENTE">ASSISTENTE (Operacional / Lançamentos)</option>
+              <option value="ADMIN">ADMIN (Acesso Total / Gestão de Usuários)</option>
+            </select>
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Registro CRC (Obrigatório para Contador)</label>
+            <input type="text" id="newUserCRC" placeholder="Ex: MG-099123/O" class="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 font-mono" />
+          </div>
+        </div>
+        <div class="pt-2 flex justify-end space-x-2">
+          <button type="button" onclick="closeModal('modalUsers')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-4 py-2 rounded-lg text-xs">Fechar</button>
+          <button type="submit" class="bg-amber-600 hover:bg-amber-700 text-white font-semibold px-4 py-2 rounded-lg text-xs">Cadastrar Usuário</button>
         </div>
       </form>
     </div>

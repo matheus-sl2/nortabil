@@ -1,7 +1,23 @@
 // NORTABIL - Lógica do Cliente Web / Dashboard Contábil
 
 let currentCompanyId = localStorage.getItem('nortabil_company_id') || '';
+let authToken = localStorage.getItem('nortabil_auth_token') || '';
+let currentUser = JSON.parse(localStorage.getItem('nortabil_current_user') || 'null');
 let cachedAccounts = [];
+
+// Interceptador global de fetch para injetar o cabeçalho Authorization: Bearer <token>
+const nativeFetch = window.fetch.bind(window);
+window.fetch = async (input, init = {}) => {
+  const url = typeof input === 'string' ? input : (input?.url || '');
+  if (authToken && url.startsWith('/api/v1')) {
+    const headers = new Headers(init.headers || {});
+    if (!headers.has('Authorization')) {
+      headers.set('Authorization', `Bearer ${authToken}`);
+    }
+    init = { ...init, headers };
+  }
+  return nativeFetch(input, init);
+};
 
 document.addEventListener('DOMContentLoaded', async () => {
   // Define data padrão de hoje no formulário de lançamento
@@ -15,6 +31,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (startInput) startInput.value = `${currentYear}-01-01`;
   if (endInput) endInput.value = `${currentYear}-12-31`;
 
+  await initAuthSession();
   await loadCompanies();
   if (currentCompanyId) {
     await initCompanyContext();
@@ -23,6 +40,178 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Inicializa 2 linhas padrão no formulário de lançamento
   initJournalFormRows();
 });
+
+// ==========================================
+// AUTENTICAÇÃO JWT & PERFIS RBAC
+// ==========================================
+async function initAuthSession() {
+  if (authToken) {
+    try {
+      const res = await fetch('/api/v1/auth/me');
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data) {
+          currentUser = json.data;
+          localStorage.setItem('nortabil_current_user', JSON.stringify(currentUser));
+          updateAuthUI();
+          return;
+        }
+      }
+    } catch (_) {
+      // Token expirado ou inválido; realiza login padrão de demonstração abaixo
+    }
+  }
+  // Autentica automaticamente como Contador padrão para pronta demonstração do Dashboard
+  await performLogin('contador@nortabil.com.br', 'Nortabil@2026', true);
+}
+
+async function performLogin(email, password, silent = false) {
+  try {
+    const res = await nativeFetch('/api/v1/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json.error?.message || json.message || 'Credenciais inválidas');
+    }
+
+    authToken = json.data.token;
+    currentUser = json.data.user;
+    localStorage.setItem('nortabil_auth_token', authToken);
+    localStorage.setItem('nortabil_current_user', JSON.stringify(currentUser));
+    updateAuthUI();
+
+    if (!silent) {
+      showAlert(`Autenticado como ${currentUser.name} [${currentUser.role}]`);
+      closeModal('modalLogin');
+    }
+    return true;
+  } catch (err) {
+    if (!silent) {
+      showAlert('Falha na autenticação: ' + err.message, 'error');
+    }
+    updateAuthUI();
+    return false;
+  }
+}
+
+async function handleLogin(e) {
+  e.preventDefault();
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  await performLogin(email, password, false);
+}
+
+async function quickLogin(email, password) {
+  document.getElementById('loginEmail').value = email;
+  document.getElementById('loginPassword').value = password;
+  await performLogin(email, password, false);
+}
+
+function handleLogout() {
+  authToken = '';
+  currentUser = null;
+  localStorage.removeItem('nortabil_auth_token');
+  localStorage.removeItem('nortabil_current_user');
+  updateAuthUI();
+  closeModal('modalLogin');
+  showAlert('Sessão encerrada. Você está no modo visitante (sem permissões de Contador/Admin).', 'error');
+}
+
+function updateAuthUI() {
+  const label = document.getElementById('authUserLabel');
+  const btnUsers = document.getElementById('btnManageUsers');
+  const sName = document.getElementById('sessionUserName');
+  const sEmail = document.getElementById('sessionUserEmail');
+  const sRole = document.getElementById('sessionUserRole');
+
+  if (currentUser && authToken) {
+    if (label) label.innerText = `${currentUser.name.split(' ')[0]} (${currentUser.role})`;
+    if (sName) sName.innerText = currentUser.name;
+    if (sEmail) sEmail.innerText = currentUser.email;
+    if (sRole) sRole.innerText = currentUser.role + (currentUser.crc_number ? ` - CRC ${currentUser.crc_number}` : '');
+
+    if (btnUsers) {
+      if (currentUser.role === 'ADMIN') {
+        btnUsers.classList.remove('hidden');
+        btnUsers.classList.add('flex');
+      } else {
+        btnUsers.classList.add('hidden');
+        btnUsers.classList.remove('flex');
+      }
+    }
+  } else {
+    if (label) label.innerText = 'Entrar (Login)';
+    if (sName) sName.innerText = 'Não autenticado';
+    if (sEmail) sEmail.innerText = '-';
+    if (sRole) sRole.innerText = 'VISITANTE';
+    if (btnUsers) {
+      btnUsers.classList.add('hidden');
+      btnUsers.classList.remove('flex');
+    }
+  }
+}
+
+async function openUsersModal() {
+  openModal('modalUsers');
+  await loadUsersList();
+}
+
+async function loadUsersList() {
+  const tbody = document.getElementById('usersTableBody');
+  if (!tbody) return;
+  try {
+    const res = await fetch('/api/v1/auth/users');
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json.message || json.error?.message || 'Acesso negado (requer ADMIN)');
+    }
+    const users = json.data || [];
+    tbody.innerHTML = users.map(u => `
+      <tr class="hover:bg-slate-50">
+        <td class="px-3 py-2 font-semibold text-slate-800">${u.name}</td>
+        <td class="px-3 py-2 text-slate-600 font-mono">${u.email}</td>
+        <td class="px-3 py-2"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${u.role === 'ADMIN' ? 'bg-indigo-100 text-indigo-800' : (u.role === 'CONTADOR' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800')}">${u.role}</span></td>
+        <td class="px-3 py-2 font-mono text-slate-500">${u.crc_number || '-'}</td>
+      </tr>
+    `).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="4" class="px-3 py-4 text-center text-rose-600 font-semibold">${err.message}</td></tr>`;
+  }
+}
+
+async function handleRegisterUser(e) {
+  e.preventDefault();
+  const payload = {
+    name: document.getElementById('newUserName').value.trim(),
+    email: document.getElementById('newUserEmail').value.trim(),
+    password: document.getElementById('newUserPassword').value,
+    role: document.getElementById('newUserRole').value,
+    crc_number: document.getElementById('newUserCRC').value.trim()
+  };
+
+  try {
+    const res = await fetch('/api/v1/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json.error?.message || json.message || 'Falha ao cadastrar usuário');
+    }
+    showAlert(`Usuário ${payload.name} (${payload.role}) cadastrado com sucesso!`);
+    document.getElementById('newUserName').value = '';
+    document.getElementById('newUserEmail').value = '';
+    document.getElementById('newUserPassword').value = '';
+    document.getElementById('newUserCRC').value = '';
+    await loadUsersList();
+  } catch (err) {
+    showAlert('Erro ao cadastrar usuário: ' + err.message, 'error');
+  }
+}
 
 // ==========================================
 // NAVEGAÇÃO E MODAIS
@@ -263,18 +452,18 @@ async function loadDashboard() {
     const json = await res.json();
     if (!json.success) throw new Error(json.message);
 
-    const data = json.data;
-    const totals = data.class_totals || [];
+    const data = json.data || {};
+    const items = data.items || [];
 
     let asset = 0, liability = 0, equity = 0, revenue = 0, expense = 0;
 
-    totals.forEach(t => {
-      const bal = parseFloat(t.total_balance) || 0;
-      if (t.class_code === '1') asset = bal;
-      if (t.class_code === '2') liability = bal;
-      if (t.class_code === '2.3' || t.class_code === '3') equity = bal;
-      if (t.class_name.includes('RECEITA')) revenue = bal;
-      if (t.class_name.includes('DESPESA')) expense = bal;
+    items.forEach(t => {
+      const bal = parseFloat(t.final_balance) || 0;
+      if (t.account_code === '1') asset = bal;
+      if (t.account_code === '2') liability = bal;
+      if (t.account_code === '3') equity = bal;
+      if (t.account_code === '4') revenue = bal;
+      if (t.account_code === '5') expense = bal;
     });
 
     const netResult = revenue - expense;
@@ -298,23 +487,27 @@ async function loadDashboard() {
       statusBadge.className = 'text-[11px] font-semibold text-slate-500';
     }
 
-    // Tabela do Balancete
+    // Tabela do Balancete (exibe contas com saldo ou sintéticas principais)
     const tbody = document.getElementById('trialBalanceTableBody');
-    if (totals.length === 0) {
+    const visibleItems = items.filter(t => t.is_synthetic || parseFloat(t.final_balance) > 0 || parseFloat(t.period_debit) > 0 || parseFloat(t.period_credit) > 0);
+    if (visibleItems.length === 0) {
       tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-6 text-center text-slate-400">Nenhuma movimentação para o período.</td></tr>';
       return;
     }
 
-    tbody.innerHTML = totals.map(t => `
-      <tr class="hover:bg-slate-50 transition">
-        <td class="px-6 py-2.5 font-bold text-slate-800">${t.class_code}</td>
-        <td class="px-6 py-2.5 font-semibold text-slate-700">${t.class_name}</td>
-        <td class="px-6 py-2.5">${t.nature === 'DEBIT' ? '<span class="badge-debit px-2 py-0.5 rounded text-[10px] font-bold">DÉBITO</span>' : '<span class="badge-credit px-2 py-0.5 rounded text-[10px] font-bold">CRÉDITO</span>'}</td>
-        <td class="px-6 py-2.5 text-right font-medium">${formatBRL(t.total_debit)}</td>
-        <td class="px-6 py-2.5 text-right font-medium">${formatBRL(t.total_credit)}</td>
-        <td class="px-6 py-2.5 text-right font-bold text-slate-900">${formatBRL(t.total_balance)}</td>
-      </tr>
-    `).join('');
+    tbody.innerHTML = visibleItems.map(t => {
+      const rowWeight = t.is_synthetic ? 'font-bold text-slate-900 bg-slate-50/70' : 'text-slate-600';
+      return `
+        <tr class="hover:bg-slate-50 transition ${rowWeight}">
+          <td class="px-6 py-2.5 font-mono">${t.account_code}</td>
+          <td class="px-6 py-2.5">${t.account_name}</td>
+          <td class="px-6 py-2.5">${t.final_nature === 'DEBIT' ? '<span class="badge-debit px-2 py-0.5 rounded text-[10px] font-bold">DÉBITO</span>' : '<span class="badge-credit px-2 py-0.5 rounded text-[10px] font-bold">CRÉDITO</span>'}</td>
+          <td class="px-6 py-2.5 text-right font-mono">${formatBRL(t.period_debit)}</td>
+          <td class="px-6 py-2.5 text-right font-mono">${formatBRL(t.period_credit)}</td>
+          <td class="px-6 py-2.5 text-right font-mono font-bold text-slate-900">${formatBRL(t.final_balance)}</td>
+        </tr>
+      `;
+    }).join('');
   } catch (err) {
     console.error('Erro ao carregar balancete:', err);
   }
@@ -454,7 +647,7 @@ async function loadJournalEntries() {
     const json = await res.json();
     if (!json.success) throw new Error(json.message);
 
-    const entries = json.data || [];
+    const entries = Array.isArray(json.data) ? json.data : (json.data?.entries || []);
     const list = document.getElementById('journalEntriesList');
     if (!list) return;
 
@@ -469,6 +662,7 @@ async function loadJournalEntries() {
           <div>
             <span class="font-mono text-xs font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">#${e.entry_number}</span>
             <span class="text-xs font-semibold text-slate-500 ml-2">${new Date(e.date).toLocaleDateString('pt-BR')}</span>
+            ${e.created_by ? `<span class="text-[11px] text-slate-400 ml-2"><i class="fa-solid fa-user-check mr-1"></i>${e.created_by}</span>` : ''}
             <h4 class="font-semibold text-slate-800 text-sm mt-1">${e.description}</h4>
           </div>
           <span class="font-mono text-xs font-bold text-slate-900 bg-slate-100 px-3 py-1 rounded">R$ ${parseFloat(e.total_debit).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
@@ -646,11 +840,12 @@ async function handleClosingYear() {
     const r = json.data;
     const box = document.getElementById('areResultBox');
     box.classList.remove('hidden');
+    const isProfit = r.is_profit || parseFloat(r.net_result) >= 0;
     box.innerHTML = `
-      <div class="font-bold text-slate-800 text-sm mb-1">${r.message}</div>
-      <div>Total de Receitas Encerradas : ${formatBRL(r.total_revenues_closed)}</div>
-      <div>Total de Despesas Encerradas: ${formatBRL(r.total_expenses_closed)}</div>
-      <div class="font-bold ${r.result_type === 'PROFIT' ? 'text-emerald-700' : 'text-rose-700'}">Resultado Líquido Apurado    : ${formatBRL(r.net_result)} (${r.result_type})</div>
+      <div class="font-bold text-slate-800 text-sm mb-1">Apuração do Exercício ${r.year} Concluída</div>
+      <div>Total de Receitas Encerradas : ${formatBRL(r.total_revenues)}</div>
+      <div>Total de Despesas Encerradas: ${formatBRL(r.total_expenses)}</div>
+      <div class="font-bold ${isProfit ? 'text-emerald-700' : 'text-rose-700'}">Resultado Líquido Apurado    : ${formatBRL(r.net_result)} (${isProfit ? 'LUCRO' : 'PREJUÍZO'})</div>
     `;
 
     showAlert('ARE Anual processada e transferida para o Patrimônio Líquido com sucesso!');
@@ -675,7 +870,8 @@ function handleExportSPED(e) {
   const signatoryName = encodeURIComponent(document.getElementById('spedSignatoryName').value);
   const signatoryCPF = encodeURIComponent(document.getElementById('spedSignatoryCPF').value);
 
-  const url = `/api/v1/companies/${currentCompanyId}/export/sped-ecd?year=${year}&auditor_crc=${crc}&auditor_name=${auditorName}&auditor_cpf=${auditorCPF}&signatory_name=${signatoryName}&signatory_cpf=${signatoryCPF}`;
+  const tokenParam = authToken ? `&token=${encodeURIComponent(authToken)}` : '';
+  const url = `/api/v1/companies/${currentCompanyId}/export/sped-ecd?year=${year}&auditor_crc=${crc}&auditor_name=${auditorName}&auditor_cpf=${auditorCPF}&signatory_name=${signatoryName}&signatory_cpf=${signatoryCPF}${tokenParam}`;
 
   window.open(url, '_blank');
 }
@@ -790,7 +986,8 @@ function renderBalanceSheet(bs) {
 function exportTrialBalanceCSV() {
   if (!currentCompanyId) return;
   const currentYear = new Date().getFullYear();
-  const url = `/api/v1/companies/${currentCompanyId}/reports/export/csv?type=trial-balance&start_date=${currentYear}-01-01&end_date=${currentYear}-12-31`;
+  const tokenParam = authToken ? `&token=${encodeURIComponent(authToken)}` : '';
+  const url = `/api/v1/companies/${currentCompanyId}/reports/export/csv?type=trial-balance&start_date=${currentYear}-01-01&end_date=${currentYear}-12-31${tokenParam}`;
   window.open(url, '_blank');
 }
 
@@ -798,7 +995,8 @@ function exportDRECSV() {
   if (!currentCompanyId) return;
   const startDate = document.getElementById('statementStartDate')?.value || `${new Date().getFullYear()}-01-01`;
   const endDate = document.getElementById('statementEndDate')?.value || `${new Date().getFullYear()}-12-31`;
-  const url = `/api/v1/companies/${currentCompanyId}/reports/export/csv?type=dre&start_date=${startDate}&end_date=${endDate}`;
+  const tokenParam = authToken ? `&token=${encodeURIComponent(authToken)}` : '';
+  const url = `/api/v1/companies/${currentCompanyId}/reports/export/csv?type=dre&start_date=${startDate}&end_date=${endDate}${tokenParam}`;
   window.open(url, '_blank');
 }
 
@@ -812,7 +1010,8 @@ function printReport(type) {
   if (sInput && sInput.value) startDate = sInput.value;
   if (eInput && eInput.value) endDate = eInput.value;
 
-  const url = `/api/v1/companies/${currentCompanyId}/reports/export/print?type=${type}&start_date=${startDate}&end_date=${endDate}`;
+  const tokenParam = authToken ? `&token=${encodeURIComponent(authToken)}` : '';
+  const url = `/api/v1/companies/${currentCompanyId}/reports/export/print?type=${type}&start_date=${startDate}&end_date=${endDate}${tokenParam}`;
   window.open(url, '_blank');
 }
 
