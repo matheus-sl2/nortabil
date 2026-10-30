@@ -36,19 +36,35 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (ledgerStart) ledgerStart.value = `${currentYear}-01-01`;
   if (ledgerEnd) ledgerEnd.value = `${currentYear}-12-31`;
 
-  await initAuthSession();
-  await loadCompanies();
-  if (currentCompanyId) {
-    await initCompanyContext();
+  const loggedIn = await initAuthSession();
+  if (loggedIn) {
+    await loadCompanies();
+    if (currentCompanyId) {
+      await initCompanyContext();
+    }
+    initJournalFormRows();
   }
-
-  // Inicializa 2 linhas padrão no formulário de lançamento
-  initJournalFormRows();
 });
 
 // ==========================================
 // AUTENTICAÇÃO JWT & PERFIS RBAC
 // ==========================================
+function showLoginScreen() {
+  const screen = document.getElementById('loginScreen');
+  if (screen) {
+    screen.classList.remove('hidden');
+    screen.classList.add('flex');
+  }
+}
+
+function hideLoginScreen() {
+  const screen = document.getElementById('loginScreen');
+  if (screen) {
+    screen.classList.add('hidden');
+    screen.classList.remove('flex');
+  }
+}
+
 async function initAuthSession() {
   if (authToken) {
     try {
@@ -59,18 +75,34 @@ async function initAuthSession() {
           currentUser = json.data;
           localStorage.setItem('nortabil_current_user', JSON.stringify(currentUser));
           updateAuthUI();
-          return;
+          hideLoginScreen();
+          return true;
         }
       }
     } catch (_) {
-      // Token expirado ou inválido; realiza login padrão de demonstração abaixo
+      // Token expirado ou inválido; limpa sessão e exige login manual
     }
   }
-  // Autentica automaticamente como Contador padrão para pronta demonstração do Dashboard
-  await performLogin('contador@nortabil.com.br', 'Nortabil@2026', true);
+  authToken = '';
+  currentUser = null;
+  localStorage.removeItem('nortabil_auth_token');
+  localStorage.removeItem('nortabil_current_user');
+  updateAuthUI();
+  showLoginScreen();
+  return false;
 }
 
-async function performLogin(email, password, silent = false) {
+async function performLogin(email, password) {
+  const errBox = document.getElementById('loginErrorBox');
+  const errText = document.getElementById('loginErrorText');
+  const btnSubmit = document.getElementById('btnLoginSubmit');
+
+  if (errBox) errBox.classList.add('hidden');
+  if (btnSubmit) {
+    btnSubmit.disabled = true;
+    btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><span>Autenticando...</span>';
+  }
+
   try {
     const res = await nativeFetch('/api/v1/auth/login', {
       method: 'POST',
@@ -79,7 +111,7 @@ async function performLogin(email, password, silent = false) {
     });
     const json = await res.json();
     if (!res.ok || !json.success) {
-      throw new Error(json.error?.message || json.message || 'Credenciais inválidas');
+      throw new Error(json.error?.message || json.message || 'E-mail ou senha inválidos.');
     }
 
     authToken = json.data.token;
@@ -87,18 +119,30 @@ async function performLogin(email, password, silent = false) {
     localStorage.setItem('nortabil_auth_token', authToken);
     localStorage.setItem('nortabil_current_user', JSON.stringify(currentUser));
     updateAuthUI();
+    hideLoginScreen();
 
-    if (!silent) {
-      showAlert(`Autenticado como ${currentUser.name} [${currentUser.role}]`);
-      closeModal('modalLogin');
+    await loadCompanies();
+    if (currentCompanyId) {
+      await initCompanyContext();
     }
+    initJournalFormRows();
+
+    showAlert(`Bem-vindo(a), ${currentUser.name} [${currentUser.role}]`);
     return true;
   } catch (err) {
-    if (!silent) {
+    if (errBox && errText) {
+      errText.innerText = err.message || 'Falha na autenticação.';
+      errBox.classList.remove('hidden');
+    } else {
       showAlert('Falha na autenticação: ' + err.message, 'error');
     }
     updateAuthUI();
     return false;
+  } finally {
+    if (btnSubmit) {
+      btnSubmit.disabled = false;
+      btnSubmit.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i><span>Entrar no Sistema</span>';
+    }
   }
 }
 
@@ -106,13 +150,7 @@ async function handleLogin(e) {
   e.preventDefault();
   const email = document.getElementById('loginEmail').value.trim();
   const password = document.getElementById('loginPassword').value;
-  await performLogin(email, password, false);
-}
-
-async function quickLogin(email, password) {
-  document.getElementById('loginEmail').value = email;
-  document.getElementById('loginPassword').value = password;
-  await performLogin(email, password, false);
+  await performLogin(email, password);
 }
 
 function handleLogout() {
@@ -120,23 +158,25 @@ function handleLogout() {
   currentUser = null;
   localStorage.removeItem('nortabil_auth_token');
   localStorage.removeItem('nortabil_current_user');
+
+  const emailInput = document.getElementById('loginEmail');
+  const passInput = document.getElementById('loginPassword');
+  const errBox = document.getElementById('loginErrorBox');
+  if (emailInput) emailInput.value = '';
+  if (passInput) passInput.value = '';
+  if (errBox) errBox.classList.add('hidden');
+
   updateAuthUI();
-  closeModal('modalLogin');
-  showAlert('Sessão encerrada. Você está no modo visitante (sem permissões de Contador/Admin).', 'error');
+  showLoginScreen();
 }
 
 function updateAuthUI() {
   const label = document.getElementById('authUserLabel');
   const btnUsers = document.getElementById('btnManageUsers');
-  const sName = document.getElementById('sessionUserName');
-  const sEmail = document.getElementById('sessionUserEmail');
-  const sRole = document.getElementById('sessionUserRole');
 
   if (currentUser && authToken) {
-    if (label) label.innerText = `${currentUser.name.split(' ')[0]} (${currentUser.role})`;
-    if (sName) sName.innerText = currentUser.name;
-    if (sEmail) sEmail.innerText = currentUser.email;
-    if (sRole) sRole.innerText = currentUser.role + (currentUser.crc_number ? ` - CRC ${currentUser.crc_number}` : '');
+    const crcSuffix = currentUser.crc_number ? ` · CRC ${currentUser.crc_number}` : '';
+    if (label) label.innerText = `${currentUser.name} (${currentUser.role}${crcSuffix})`;
 
     if (btnUsers) {
       if (currentUser.role === 'ADMIN') {
@@ -148,10 +188,7 @@ function updateAuthUI() {
       }
     }
   } else {
-    if (label) label.innerText = 'Entrar (Login)';
-    if (sName) sName.innerText = 'Não autenticado';
-    if (sEmail) sEmail.innerText = '-';
-    if (sRole) sRole.innerText = 'VISITANTE';
+    if (label) label.innerText = 'Não autenticado';
     if (btnUsers) {
       btnUsers.classList.add('hidden');
       btnUsers.classList.remove('flex');

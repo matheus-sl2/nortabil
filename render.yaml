@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: nortabil-erp
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /healthz
+    envVars:
+      - key: PORT
+        value: "8080"
+      - key: ENVIRONMENT
+        value: production
+      - key: LOG_LEVEL
+        value: info
+      - key: AUTO_MIGRATE
+        value: "true"
+      - key: AUTO_SEED
+        value: "true"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: nortabil-postgres
+          property: connectionString
+
+databases:
+  - name: nortabil-postgres
+    plan: free
+    databaseName: nortabil_db
+    user: nortabil
+    postgresMajorVersion: "16"
