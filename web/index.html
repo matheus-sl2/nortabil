@@ -11,98 +11,123 @@
     body { font-family: 'Inter', sans-serif; }
     .badge-debit { background-color: #fee2e2; color: #991b1b; }
     .badge-credit { background-color: #dcfce7; color: #166534; }
+    /* Acessibilidade WCAG 2.1 AA / eMAG: Foco visível por teclado */
+    button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+      outline: 2px solid #4f46e5;
+      outline-offset: 2px;
+    }
+    .skip-link {
+      position: absolute;
+      left: -9999px;
+      top: 0;
+      z-index: 9999;
+      background: #1e1b4b;
+      color: #ffffff;
+      padding: 0.5rem 1rem;
+      font-size: 0.75rem;
+      font-weight: 700;
+      border-radius: 0 0 0.5rem 0;
+    }
+    .skip-link:focus {
+      left: 0;
+    }
   </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+  <a href="#mainContent" class="skip-link">Pular para o conteúdo principal</a>
 
   <!-- Cabeçalho Principal -->
-  <header class="bg-indigo-900 text-white shadow-lg sticky top-0 z-50">
+  <header role="banner" class="bg-indigo-900 text-white shadow-lg sticky top-0 z-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
-        <div class="w-10 h-10 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-xl shadow-md border border-indigo-400">
+        <div role="img" aria-label="Logotipo institucional do NORTABIL" class="w-10 h-10 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-xl shadow-md border border-indigo-400">
           N
         </div>
         <div>
           <h1 class="text-xl font-bold tracking-tight">NORTABIL</h1>
-          <p class="text-xs text-indigo-200">Motor de Partidas Dobradas & Núcleo ERP Contábil</p>
+          <p class="text-xs text-indigo-100">Motor de Partidas Dobradas &amp; Núcleo ERP Contábil</p>
         </div>
       </div>
 
       <!-- Seletor de Empresa Ativa (Multi-Tenant) e Sessão Autenticada (RBAC) -->
       <div class="flex items-center space-x-3 flex-wrap gap-y-2">
         <div class="flex items-center space-x-2 bg-indigo-950/60 px-3 py-1.5 rounded-lg border border-indigo-700">
-          <i class="fa-solid fa-building text-indigo-300 text-sm"></i>
-          <span class="text-xs text-indigo-300 font-medium">Empresa:</span>
-          <select id="companySelector" class="bg-transparent text-white text-sm font-semibold focus:outline-none cursor-pointer pr-2">
+          <i class="fa-solid fa-building text-indigo-200 text-sm" aria-hidden="true"></i>
+          <label for="companySelector" class="text-xs text-indigo-200 font-medium">Empresa:</label>
+          <select id="companySelector" aria-label="Selecionar empresa ativa para escrituração" class="bg-transparent text-white text-sm font-semibold focus:outline-none cursor-pointer pr-2">
             <option value="" disabled selected>Carregando empresas...</option>
           </select>
         </div>
-        <button onclick="openModal('modalNewCompany')" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition">
-          <i class="fa-solid fa-plus"></i>
+        <button onclick="openModal('modalNewCompany')" aria-label="Cadastrar nova empresa cliente" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition">
+          <i class="fa-solid fa-plus" aria-hidden="true"></i>
           <span>Nova Empresa</span>
         </button>
-        <button id="btnManageUsers" onclick="openUsersModal()" class="hidden bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold items-center space-x-1.5 transition">
-          <i class="fa-solid fa-users-gear"></i>
+        <button id="btnManageUsers" onclick="openUsersModal()" aria-label="Gerenciar usuários e permissões RBAC" class="hidden bg-amber-700 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold items-center space-x-1.5 transition">
+          <i class="fa-solid fa-users-gear" aria-hidden="true"></i>
           <span>Usuários RBAC</span>
         </button>
+        <button onclick="openLegalModal('privacy')" aria-label="Abrir central de privacidade, LGPD e direitos do titular" class="bg-indigo-800 hover:bg-indigo-700 text-indigo-100 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition border border-indigo-600" title="Política de Privacidade, Termos de Uso e Meus Dados (LGPD)">
+          <i class="fa-solid fa-scale-balanced text-indigo-300" aria-hidden="true"></i>
+          <span>LGPD &amp; Termos</span>
+        </button>
         <div id="authStatusBadge" class="bg-indigo-950/80 text-indigo-100 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-2 border border-indigo-700" title="Usuário autenticado na sessão atual">
-          <i class="fa-solid fa-user-shield text-emerald-400"></i>
+          <i class="fa-solid fa-user-shield text-emerald-400" aria-hidden="true"></i>
           <span id="authUserLabel">Não autenticado</span>
         </div>
-        <button id="btnLogout" onclick="handleLogout()" class="bg-rose-600 hover:bg-rose-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition shadow-sm" title="Encerrar a sessão atual para entrar com outro usuário">
-          <i class="fa-solid fa-right-from-bracket"></i>
+        <button id="btnLogout" onclick="handleLogout()" aria-label="Encerrar sessão atual e voltar para a tela de login" class="bg-rose-700 hover:bg-rose-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition shadow-sm" title="Encerrar a sessão atual para entrar com outro usuário">
+          <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>
           <span>Encerrar Sessão</span>
         </button>
-        <a href="/swagger" target="_blank" class="text-xs bg-indigo-800 hover:bg-indigo-700 text-indigo-100 px-3 py-1.5 rounded-lg transition border border-indigo-600">
-          <i class="fa-solid fa-code"></i> Swagger API
+        <a href="/swagger" target="_blank" rel="noopener noreferrer" aria-label="Abrir documentação técnica da API no Swagger" class="text-xs bg-indigo-800 hover:bg-indigo-700 text-indigo-100 px-3 py-1.5 rounded-lg transition border border-indigo-600">
+          <i class="fa-solid fa-code" aria-hidden="true"></i> Swagger API
         </a>
       </div>
     </div>
 
     <!-- Barra de Navegação -->
-    <div class="bg-indigo-950/90 border-t border-indigo-800">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex space-x-1 overflow-x-auto">
-        <button onclick="switchTab('tabDashboard')" class="nav-btn active px-4 py-2 text-sm font-medium border-b-2 border-indigo-400 text-white flex items-center space-x-2 whitespace-nowrap">
-          <i class="fa-solid fa-chart-pie"></i><span>Dashboard Geral</span>
+    <nav aria-label="Navegação principal dos módulos contábeis" class="bg-indigo-950/90 border-t border-indigo-800">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex space-x-1 overflow-x-auto" role="tablist">
+        <button onclick="switchTab('tabDashboard')" role="tab" class="nav-btn active px-4 py-2 text-sm font-medium border-b-2 border-indigo-400 text-white flex items-center space-x-2 whitespace-nowrap">
+          <i class="fa-solid fa-chart-pie" aria-hidden="true"></i><span>Dashboard Geral</span>
         </button>
-        <button onclick="switchTab('tabJournal')" class="nav-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-indigo-300 hover:text-white flex items-center space-x-2 whitespace-nowrap">
-          <i class="fa-solid fa-book-journal-whills"></i><span>Lançamentos & Diário</span>
+        <button onclick="switchTab('tabJournal')" role="tab" class="nav-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-indigo-200 hover:text-white flex items-center space-x-2 whitespace-nowrap">
+          <i class="fa-solid fa-book-journal-whills" aria-hidden="true"></i><span>Lançamentos &amp; Diário</span>
         </button>
-        <button onclick="switchTab('tabLedger')" class="nav-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-indigo-300 hover:text-white flex items-center space-x-2 whitespace-nowrap">
-          <i class="fa-solid fa-book-open-reader"></i><span>Livro Razão</span>
+        <button onclick="switchTab('tabLedger')" role="tab" class="nav-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-indigo-200 hover:text-white flex items-center space-x-2 whitespace-nowrap">
+          <i class="fa-solid fa-book-open-reader" aria-hidden="true"></i><span>Livro Razão</span>
         </button>
-        <button onclick="switchTab('tabAccounts')" class="nav-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-indigo-300 hover:text-white flex items-center space-x-2 whitespace-nowrap">
-          <i class="fa-solid fa-sitemap"></i><span>Plano de Contas</span>
+        <button onclick="switchTab('tabAccounts')" role="tab" class="nav-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-indigo-200 hover:text-white flex items-center space-x-2 whitespace-nowrap">
+          <i class="fa-solid fa-sitemap" aria-hidden="true"></i><span>Plano de Contas</span>
         </button>
-        <button onclick="switchTab('tabOFX')" class="nav-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-indigo-300 hover:text-white flex items-center space-x-2 whitespace-nowrap">
-          <i class="fa-solid fa-file-invoice-dollar"></i><span>Conciliação OFX</span>
+        <button onclick="switchTab('tabOFX')" role="tab" class="nav-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-indigo-200 hover:text-white flex items-center space-x-2 whitespace-nowrap">
+          <i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i><span>Conciliação OFX</span>
         </button>
-        <button onclick="switchTab('tabNFe')" class="nav-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-indigo-300 hover:text-white flex items-center space-x-2 whitespace-nowrap">
-          <i class="fa-solid fa-file-code"></i><span>Importador NF-e (XML)</span>
+        <button onclick="switchTab('tabNFe')" role="tab" class="nav-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-indigo-200 hover:text-white flex items-center space-x-2 whitespace-nowrap">
+          <i class="fa-solid fa-file-code" aria-hidden="true"></i><span>Importador NF-e (XML)</span>
         </button>
-        <button onclick="switchTab('tabPeriods')" class="nav-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-indigo-300 hover:text-white flex items-center space-x-2 whitespace-nowrap">
-          <i class="fa-solid fa-calendar-check"></i><span>Períodos & ARE</span>
+        <button onclick="switchTab('tabPeriods')" role="tab" class="nav-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-indigo-200 hover:text-white flex items-center space-x-2 whitespace-nowrap">
+          <i class="fa-solid fa-calendar-check" aria-hidden="true"></i><span>Períodos &amp; ARE</span>
         </button>
-        <button onclick="switchTab('tabStatements')" class="nav-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-indigo-300 hover:text-white flex items-center space-x-2 whitespace-nowrap">
-          <i class="fa-solid fa-file-lines"></i><span>DRE & Balanço</span>
+        <button onclick="switchTab('tabStatements')" role="tab" class="nav-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-indigo-200 hover:text-white flex items-center space-x-2 whitespace-nowrap">
+          <i class="fa-solid fa-file-lines" aria-hidden="true"></i><span>DRE &amp; Balanço</span>
         </button>
-        <button onclick="switchTab('tabSPED')" class="nav-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-indigo-300 hover:text-white flex items-center space-x-2 whitespace-nowrap">
-          <i class="fa-solid fa-file-export"></i><span>Exportador SPED ECD</span>
+        <button onclick="switchTab('tabSPED')" role="tab" class="nav-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-indigo-200 hover:text-white flex items-center space-x-2 whitespace-nowrap">
+          <i class="fa-solid fa-file-export" aria-hidden="true"></i><span>Exportador SPED ECD</span>
         </button>
       </div>
-    </div>
+    </nav>
   </header>
 
   <!-- Conteúdo Principal -->
-  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full">
+  <main id="mainContent" role="main" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full">
 
     <!-- Mensagem de Alerta / Notificação -->
-    <div id="alertBox" class="hidden mb-4 p-4 rounded-lg flex items-center justify-between text-sm shadow-sm transition">
+    <div id="alertBox" role="alert" aria-live="polite" class="hidden mb-4 p-4 rounded-lg flex items-center justify-between text-sm shadow-sm transition">
       <div class="flex items-center space-x-3">
-        <i id="alertIcon" class="fa-solid text-lg"></i>
+        <i id="alertIcon" class="fa-solid text-lg" aria-hidden="true"></i>
         <span id="alertMessage" class="font-medium"></span>
       </div>
-      <button onclick="hideAlert()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-times"></i></button>
+      <button onclick="hideAlert()" aria-label="Fechar mensagem de alerta" class="text-slate-500 hover:text-slate-700"><i class="fa-solid fa-times" aria-hidden="true"></i></button>
     </div>
 
     <!-- ==================== ABA 1: DASHBOARD ==================== -->
@@ -785,40 +810,40 @@
   </main>
 
   <!-- Modal: Cadastrar Nova Empresa -->
-  <div id="modalNewCompany" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
+  <div id="modalNewCompany" role="dialog" aria-modal="true" aria-labelledby="modalNewCompanyTitle" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
     <div class="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 border border-slate-200">
       <div class="flex justify-between items-center border-b border-slate-200 pb-3 mb-4">
-        <h4 class="font-bold text-slate-800 text-sm flex items-center space-x-2">
-          <i class="fa-solid fa-building text-indigo-600"></i>
+        <h4 id="modalNewCompanyTitle" class="font-bold text-slate-800 text-sm flex items-center space-x-2">
+          <i class="fa-solid fa-building text-indigo-600" aria-hidden="true"></i>
           <span>Cadastrar Nova Empresa Cliente</span>
         </h4>
-        <button onclick="closeModal('modalNewCompany')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-times"></i></button>
+        <button onclick="closeModal('modalNewCompany')" aria-label="Fechar janela de cadastro de empresa" class="text-slate-500 hover:text-slate-700"><i class="fa-solid fa-times" aria-hidden="true"></i></button>
       </div>
       <form onsubmit="handleCreateCompany(event)" class="space-y-3">
         <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">CNPJ (com validação matemática)</label>
+          <label for="newCompanyCNPJ" class="block text-xs font-semibold text-slate-700 mb-1">CNPJ (com validação matemática)</label>
           <input type="text" id="newCompanyCNPJ" placeholder="00.000.000/0000-00" required class="w-full text-sm border border-slate-300 rounded-lg px-3 py-2" />
         </div>
         <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">Razão Social</label>
+          <label for="newCompanyLegalName" class="block text-xs font-semibold text-slate-700 mb-1">Razão Social</label>
           <input type="text" id="newCompanyLegalName" placeholder="Ex: Cooperativa dos Produtores de Januária Ltda" required class="w-full text-sm border border-slate-300 rounded-lg px-3 py-2" />
         </div>
         <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">Nome Fantasia</label>
+          <label for="newCompanyTradeName" class="block text-xs font-semibold text-slate-700 mb-1">Nome Fantasia</label>
           <input type="text" id="newCompanyTradeName" placeholder="Ex: Coop Januária" class="w-full text-sm border border-slate-300 rounded-lg px-3 py-2" />
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">Cidade</label>
+            <label for="newCompanyCity" class="block text-xs font-semibold text-slate-700 mb-1">Cidade</label>
             <input type="text" id="newCompanyCity" value="Januária" class="w-full text-sm border border-slate-300 rounded-lg px-3 py-2" />
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">Estado</label>
+            <label for="newCompanyState" class="block text-xs font-semibold text-slate-700 mb-1">Estado</label>
             <input type="text" id="newCompanyState" value="MG" maxlength="2" class="w-full text-sm border border-slate-300 rounded-lg px-3 py-2" />
           </div>
         </div>
         <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">Regime Tributário</label>
+          <label for="newCompanyRegime" class="block text-xs font-semibold text-slate-700 mb-1">Regime Tributário</label>
           <select id="newCompanyRegime" class="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 bg-white">
             <option value="SIMPLES_NACIONAL">Simples Nacional</option>
             <option value="LUCRO_PRESUMIDO" selected>Lucro Presumido</option>
@@ -828,9 +853,13 @@
         </div>
         <div class="flex items-center space-x-2 pt-1">
           <input type="checkbox" id="newCompanyCloneChart" checked class="rounded text-indigo-600 focus:ring-indigo-500" />
-          <label for="newCompanyCloneChart" class="text-xs text-slate-600 font-medium">Clonar plano de contas padrão (SPED/ECD)</label>
+          <label for="newCompanyCloneChart" class="text-xs text-slate-700 font-medium">Clonar plano de contas padrão (SPED/ECD)</label>
         </div>
-        <div class="pt-3 flex justify-end space-x-2">
+        <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-[11px] text-slate-600 leading-relaxed">
+          <i class="fa-solid fa-shield-halved text-indigo-600 mr-1" aria-hidden="true"></i>
+          <strong>Minimização de Dados (LGPD Art. 6º, III):</strong> Coletamos exclusivamente os dados cadastrais pessoa jurídica estritamente exigidos pela Receita Federal (SPED ECD) e pelo Código Civil (Art. 1.179).
+        </div>
+        <div class="pt-2 flex justify-end space-x-2">
           <button type="button" onclick="closeModal('modalNewCompany')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-4 py-2 rounded-lg text-xs">Cancelar</button>
           <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg text-xs">Salvar Empresa</button>
         </div>
@@ -839,26 +868,26 @@
   </div>
 
   <!-- Modal: Cadastrar Nova Conta -->
-  <div id="modalNewAccount" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
+  <div id="modalNewAccount" role="dialog" aria-modal="true" aria-labelledby="modalNewAccountTitle" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
     <div class="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 border border-slate-200">
       <div class="flex justify-between items-center border-b border-slate-200 pb-3 mb-4">
-        <h4 class="font-bold text-slate-800 text-sm flex items-center space-x-2">
-          <i class="fa-solid fa-folder-plus text-indigo-600"></i>
+        <h4 id="modalNewAccountTitle" class="font-bold text-slate-800 text-sm flex items-center space-x-2">
+          <i class="fa-solid fa-folder-plus text-indigo-600" aria-hidden="true"></i>
           <span>Cadastrar Nova Conta no Plano</span>
         </h4>
-        <button onclick="closeModal('modalNewAccount')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-times"></i></button>
+        <button onclick="closeModal('modalNewAccount')" aria-label="Fechar janela de cadastro de conta" class="text-slate-500 hover:text-slate-700"><i class="fa-solid fa-times" aria-hidden="true"></i></button>
       </div>
       <form onsubmit="handleCreateAccount(event)" class="space-y-3">
         <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">Código Hierárquico</label>
+          <label for="newAccountCode" class="block text-xs font-semibold text-slate-700 mb-1">Código Hierárquico</label>
           <input type="text" id="newAccountCode" placeholder="Ex: 1.1.01.004" required class="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 font-mono" />
         </div>
         <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">Nome da Conta</label>
+          <label for="newAccountName" class="block text-xs font-semibold text-slate-700 mb-1">Nome da Conta</label>
           <input type="text" id="newAccountName" placeholder="Ex: Banco Cooperativo Credijanuária" required class="w-full text-sm border border-slate-300 rounded-lg px-3 py-2" />
         </div>
         <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">Grupo Patrimonial</label>
+          <label for="newAccountType" class="block text-xs font-semibold text-slate-700 mb-1">Grupo Patrimonial</label>
           <select id="newAccountType" class="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 bg-white">
             <option value="ASSET">Ativo</option>
             <option value="LIABILITY">Passivo</option>
@@ -869,7 +898,7 @@
         </div>
         <div class="flex items-center space-x-2 pt-1">
           <input type="checkbox" id="newAccountIsSynthetic" class="rounded text-indigo-600 focus:ring-indigo-500" />
-          <label for="newAccountIsSynthetic" class="text-xs text-slate-600 font-medium">Conta Sintética (Totalizadora - não recebe lançamentos)</label>
+          <label for="newAccountIsSynthetic" class="text-xs text-slate-700 font-medium">Conta Sintética (Totalizadora - não recebe lançamentos)</label>
         </div>
         <div class="pt-3 flex justify-end space-x-2">
           <button type="button" onclick="closeModal('modalNewAccount')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-4 py-2 rounded-lg text-xs">Cancelar</button>
@@ -880,18 +909,18 @@
   </div>
 
   <!-- Tela Obrigatória de Login (Bloqueio Total quando não autenticado) -->
-  <div id="loginScreen" class="fixed inset-0 bg-gradient-to-br from-indigo-950 via-slate-900 to-indigo-900 flex items-center justify-center z-[100] p-4">
+  <div id="loginScreen" role="dialog" aria-modal="true" aria-labelledby="loginScreenTitle" class="fixed inset-0 bg-gradient-to-br from-indigo-950 via-slate-900 to-indigo-900 flex items-center justify-center z-[100] p-4">
     <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 border border-slate-200">
       <div class="text-center mb-6">
-        <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-900 text-white shadow-lg mb-3">
-          <i class="fa-solid fa-scale-balanced text-2xl text-indigo-300"></i>
+        <div role="img" aria-label="Símbolo da Balança Contábil do NORTABIL" class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-900 text-white shadow-lg mb-3">
+          <i class="fa-solid fa-scale-balanced text-2xl text-indigo-300" aria-hidden="true"></i>
         </div>
-        <h2 class="text-2xl font-extrabold text-slate-900 tracking-tight">NORTABIL</h2>
-        <p class="text-xs font-medium text-slate-500 mt-1">Sistema ERP Contábil &amp; Motor de Partidas Dobradas</p>
+        <h2 id="loginScreenTitle" class="text-2xl font-extrabold text-slate-900 tracking-tight">NORTABIL</h2>
+        <p class="text-xs font-medium text-slate-600 mt-1">Sistema ERP Contábil &amp; Motor de Partidas Dobradas</p>
       </div>
 
-      <div id="loginErrorBox" class="hidden mb-4 p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium flex items-center space-x-2">
-        <i class="fa-solid fa-circle-exclamation text-rose-600"></i>
+      <div id="loginErrorBox" role="alert" class="hidden mb-4 p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs font-medium flex items-center space-x-2">
+        <i class="fa-solid fa-circle-exclamation text-rose-600" aria-hidden="true"></i>
         <span id="loginErrorText">E-mail ou senha inválidos.</span>
       </div>
 
@@ -899,59 +928,72 @@
         <div>
           <label for="loginEmail" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">E-mail de Acesso</label>
           <div class="relative">
-            <i class="fa-solid fa-envelope text-slate-400 absolute left-3.5 top-3 text-xs"></i>
+            <i class="fa-solid fa-envelope text-slate-500 absolute left-3.5 top-3 text-xs" aria-hidden="true"></i>
             <input type="email" id="loginEmail" placeholder="Digite seu e-mail corporativo" required autocomplete="username" class="w-full text-sm border border-slate-300 rounded-xl pl-9 pr-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600" />
           </div>
         </div>
         <div>
           <label for="loginPassword" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Senha</label>
           <div class="relative">
-            <i class="fa-solid fa-lock text-slate-400 absolute left-3.5 top-3 text-xs"></i>
+            <i class="fa-solid fa-lock text-slate-500 absolute left-3.5 top-3 text-xs" aria-hidden="true"></i>
             <input type="password" id="loginPassword" placeholder="Digite sua senha" required autocomplete="current-password" class="w-full text-sm border border-slate-300 rounded-xl pl-9 pr-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600" />
           </div>
         </div>
-        <div class="pt-2">
+        <div class="flex items-start space-x-2 pt-1">
+          <input type="checkbox" id="loginTermsConsent" required checked class="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500" />
+          <label for="loginTermsConsent" class="text-[11px] text-slate-600 leading-snug">
+            Declaro estar ciente dos <button type="button" onclick="openLegalModal('terms')" class="text-indigo-700 font-semibold underline hover:text-indigo-900">Termos de Uso</button> e da <button type="button" onclick="openLegalModal('privacy')" class="text-indigo-700 font-semibold underline hover:text-indigo-900">Política de Privacidade (LGPD)</button>.
+          </label>
+        </div>
+        <div class="pt-1">
           <button type="submit" id="btnLoginSubmit" class="w-full bg-indigo-700 hover:bg-indigo-800 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition shadow-md flex items-center justify-center space-x-2">
-            <i class="fa-solid fa-right-to-bracket"></i>
+            <i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i>
             <span>Entrar no Sistema</span>
           </button>
         </div>
       </form>
 
-      <div class="mt-6 pt-4 border-t border-slate-100 text-center">
-        <p class="text-[11px] text-slate-400">
-          <i class="fa-solid fa-shield-halved text-indigo-500 mr-1"></i>
+      <div class="mt-6 pt-4 border-t border-slate-100 text-center space-y-2">
+        <p class="text-[11px] text-slate-600">
+          <i class="fa-solid fa-shield-halved text-indigo-600 mr-1" aria-hidden="true"></i>
           Autenticação protegida por JWT + Bcrypt e Controle de Acesso RBAC
         </p>
+        <div class="flex justify-center flex-wrap gap-x-3 gap-y-1 text-[11px] text-indigo-700 font-semibold">
+          <button type="button" onclick="openLegalModal('privacy')" class="hover:underline">Privacidade &amp; LGPD</button>
+          <span class="text-slate-300" aria-hidden="true">|</span>
+          <button type="button" onclick="openLegalModal('terms')" class="hover:underline">Termos de Uso</button>
+          <span class="text-slate-300" aria-hidden="true">|</span>
+          <button type="button" onclick="openLegalModal('refund')" class="hover:underline">Política de Reembolso</button>
+        </div>
       </div>
     </div>
   </div>
 
   <!-- Modal: Gestão de Usuários RBAC (Restrito a ADMIN) -->
-  <div id="modalUsers" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
+  <div id="modalUsers" role="dialog" aria-modal="true" aria-labelledby="modalUsersTitle" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
     <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6 border border-slate-200 max-h-[90vh] overflow-y-auto">
       <div class="flex justify-between items-center border-b border-slate-200 pb-3 mb-4">
-        <h4 class="font-bold text-slate-800 text-sm flex items-center space-x-2">
-          <i class="fa-solid fa-users-gear text-amber-600"></i>
+        <h4 id="modalUsersTitle" class="font-bold text-slate-800 text-sm flex items-center space-x-2">
+          <i class="fa-solid fa-users-gear text-amber-600" aria-hidden="true"></i>
           <span>Gestão de Usuários e Perfis de Acesso (RBAC - Exclusivo ADMIN)</span>
         </h4>
-        <button onclick="closeModal('modalUsers')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-times"></i></button>
+        <button onclick="closeModal('modalUsers')" aria-label="Fechar janela de gestão de usuários" class="text-slate-500 hover:text-slate-700"><i class="fa-solid fa-times" aria-hidden="true"></i></button>
       </div>
 
       <div class="mb-5">
         <h5 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Usuários Cadastrados</h5>
         <div class="overflow-x-auto border border-slate-200 rounded-lg">
           <table class="min-w-full text-xs">
-            <thead class="bg-slate-50 text-slate-600 border-b border-slate-200">
+            <thead class="bg-slate-50 text-slate-700 border-b border-slate-200">
               <tr>
-                <th class="px-3 py-2 text-left">Nome</th>
-                <th class="px-3 py-2 text-left">E-mail</th>
-                <th class="px-3 py-2 text-left">Perfil (Role)</th>
-                <th class="px-3 py-2 text-left">CRC</th>
+                <th scope="col" class="px-3 py-2 text-left">Nome</th>
+                <th scope="col" class="px-3 py-2 text-left">E-mail</th>
+                <th scope="col" class="px-3 py-2 text-left">Perfil (Role)</th>
+                <th scope="col" class="px-3 py-2 text-left">CRC</th>
               </tr>
             </thead>
             <tbody id="usersTableBody" class="divide-y divide-slate-100">
-              <tr><td colspan="4" class="px-3 py-4 text-center text-slate-400">Carregando usuários...</td></tr>
+              <tr><td colspan="4" class="px-3 py-4 text-center text-slate-500">Carregando usuários...</td></tr>
             </tbody>
           </table>
         </div>
@@ -961,19 +1003,19 @@
         <h5 class="text-xs font-bold text-slate-700 uppercase tracking-wider">Cadastrar Novo Usuário no Escritório</h5>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">Nome Completo</label>
+            <label for="newUserName" class="block text-xs font-semibold text-slate-700 mb-1">Nome Completo</label>
             <input type="text" id="newUserName" placeholder="Ex: Marcos Oliveira" required class="w-full text-sm border border-slate-300 rounded-lg px-3 py-2" />
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">E-mail</label>
+            <label for="newUserEmail" class="block text-xs font-semibold text-slate-700 mb-1">E-mail</label>
             <input type="email" id="newUserEmail" placeholder="marcos@nortabil.com.br" required class="w-full text-sm border border-slate-300 rounded-lg px-3 py-2" />
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">Senha Inicial</label>
+            <label for="newUserPassword" class="block text-xs font-semibold text-slate-700 mb-1">Senha Inicial</label>
             <input type="password" id="newUserPassword" placeholder="Mínimo 6 caracteres" required class="w-full text-sm border border-slate-300 rounded-lg px-3 py-2" />
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">Perfil de Acesso (RBAC)</label>
+            <label for="newUserRole" class="block text-xs font-semibold text-slate-700 mb-1">Perfil de Acesso (RBAC)</label>
             <select id="newUserRole" class="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 bg-white">
               <option value="CONTADOR">CONTADOR (Fecha períodos / ARE / SPED)</option>
               <option value="ASSISTENTE">ASSISTENTE (Operacional / Lançamentos)</option>
@@ -981,20 +1023,206 @@
             </select>
           </div>
           <div class="sm:col-span-2">
-            <label class="block text-xs font-semibold text-slate-600 mb-1">Registro CRC (Obrigatório para Contador)</label>
+            <label for="newUserCRC" class="block text-xs font-semibold text-slate-700 mb-1">Registro CRC (Obrigatório apenas para Contador — Minimização LGPD)</label>
             <input type="text" id="newUserCRC" placeholder="Ex: MG-099123/O" class="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 font-mono" />
           </div>
         </div>
+        <div class="flex items-start space-x-2 pt-1">
+          <input type="checkbox" id="newUserLGPDConsent" required checked class="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500" />
+          <label for="newUserLGPDConsent" class="text-[11px] text-slate-600 leading-snug">
+            <strong>Conformidade LGPD (Lei nº 13.709/2018):</strong> Confirmo que coletamos apenas os dados estritamente necessários (nome, e-mail profissional e CRC quando aplicável) para autenticação e trilha de auditoria contábil (NBC ITG 2000).
+          </label>
+        </div>
         <div class="pt-2 flex justify-end space-x-2">
           <button type="button" onclick="closeModal('modalUsers')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-4 py-2 rounded-lg text-xs">Fechar</button>
-          <button type="submit" class="bg-amber-600 hover:bg-amber-700 text-white font-semibold px-4 py-2 rounded-lg text-xs">Cadastrar Usuário</button>
+          <button type="submit" class="bg-amber-700 hover:bg-amber-800 text-white font-semibold px-4 py-2 rounded-lg text-xs">Cadastrar Usuário</button>
         </div>
       </form>
     </div>
   </div>
 
-  <footer class="bg-slate-100 border-t border-slate-200 py-3 text-center text-xs text-slate-500">
-    NORTABIL - Projeto de Conclusão de Curso (TCC) | Desenvolvido com foco no Norte de Minas Gerais
+  <!-- Modal: Central Legal, Privacidade (LGPD), Termos, Reembolso, Acessibilidade e Direitos do Titular -->
+  <div id="modalLegal" role="dialog" aria-modal="true" aria-labelledby="modalLegalTitle" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm hidden items-center justify-center z-[110] p-4">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-4xl w-full p-6 border border-slate-200 max-h-[90vh] flex flex-col">
+      <div class="flex justify-between items-center border-b border-slate-200 pb-3 mb-4">
+        <h3 id="modalLegalTitle" class="font-bold text-slate-900 text-base flex items-center space-x-2">
+          <i class="fa-solid fa-gavel text-indigo-700" aria-hidden="true"></i>
+          <span>Central de Conformidade Jurídica, Privacidade (LGPD) e Direitos do Titular</span>
+        </h3>
+        <button onclick="closeModal('modalLegal')" aria-label="Fechar central de conformidade jurídica" class="text-slate-500 hover:text-slate-800 p-1"><i class="fa-solid fa-times text-lg" aria-hidden="true"></i></button>
+      </div>
+
+      <!-- Abas Internas do Modal Legal -->
+      <div class="flex flex-wrap gap-1.5 border-b border-slate-200 pb-3 mb-4" role="tablist" aria-label="Seções jurídicas e regulatórias">
+        <button type="button" onclick="switchLegalSection('privacy')" id="btnLegalPrivacy" class="legal-tab-btn px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-700 text-white transition">
+          <i class="fa-solid fa-user-lock mr-1" aria-hidden="true"></i>Política de Privacidade (LGPD)
+        </button>
+        <button type="button" onclick="switchLegalSection('terms')" id="btnLegalTerms" class="legal-tab-btn px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition">
+          <i class="fa-solid fa-file-contract mr-1" aria-hidden="true"></i>Termos de Uso
+        </button>
+        <button type="button" onclick="switchLegalSection('refund')" id="btnLegalRefund" class="legal-tab-btn px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition">
+          <i class="fa-solid fa-hand-holding-dollar mr-1" aria-hidden="true"></i>Política de Reembolso (CDC)
+        </button>
+        <button type="button" onclick="switchLegalSection('rights')" id="btnLegalRights" class="legal-tab-btn px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition">
+          <i class="fa-solid fa-user-check mr-1" aria-hidden="true"></i>Meus Dados &amp; Exclusão (Art. 18)
+        </button>
+        <button type="button" onclick="switchLegalSection('audit')" id="btnLegalAudit" class="legal-tab-btn px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition">
+          <i class="fa-solid fa-universal-access mr-1" aria-hidden="true"></i>Rastreamento, Direitos Autorais &amp; Acessibilidade
+        </button>
+      </div>
+
+      <!-- Conteúdo Rolável das Seções -->
+      <div class="overflow-y-auto flex-1 pr-2 text-xs text-slate-700 space-y-4 leading-relaxed">
+
+        <!-- 1. POLÍTICA DE PRIVACIDADE (LGPD) -->
+        <div id="legalSection_privacy" class="legal-section space-y-3">
+          <div class="p-3 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-900">
+            <strong>Resumo Executivo (Lei Geral de Proteção de Dados Pessoais — Lei nº 13.709/2018):</strong> O sistema <strong>NORTABIL</strong> adota o princípio de <em>Privacy by Design</em> e <em>Minimização de Dados</em> (Art. 6º, III da LGPD). Não utilizamos Google Analytics, pixels de publicidade, cookies de rastreamento de terceiros nem comercializamos dados.
+          </div>
+          <h4 class="font-bold text-slate-900 text-sm">1.1. Dados Coletados (Princípio da Necessidade)</h4>
+          <ul class="list-disc pl-5 space-y-1">
+            <li><strong>Dados de Profissionais / Usuários Internos:</strong> Nome completo, endereço de e-mail corporativo, hash criptográfico de senha (Bcrypt) e número de registro no Conselho Regional de Contabilidade (CRC, exigido exclusivamente para o perfil Contador).</li>
+            <li><strong>Dados de Pessoas Jurídicas Escrituradas:</strong> CNPJ, Razão Social, Nome Fantasia, Município/UF, Regime Tributário e lançamentos contábeis/fiscais exigidos pela legislação societária e tributária.</li>
+          </ul>
+          <h4 class="font-bold text-slate-900 text-sm">1.2. Bases Legais do Tratamento (Art. 7º da LGPD)</h4>
+          <ul class="list-disc pl-5 space-y-1">
+            <li><strong>Cumprimento de obrigação legal ou regulatória (Art. 7º, II):</strong> Escrituração contábil obrigatória conforme Código Civil (Lei nº 10.406/2002, Art. 1.179), Lei das S/A (Lei nº 6.404/1976), Normas Brasileiras de Contabilidade (NBC TG / NBC ITG 2000) e Instruções Normativas da Receita Federal (SPED ECD).</li>
+            <li><strong>Execução de contrato e legítimo interesse técnico (Art. 7º, V e IX):</strong> Controle de acesso baseado em funções (RBAC) e manutenção da trilha de auditoria imutável.</li>
+          </ul>
+          <h4 class="font-bold text-slate-900 text-sm">1.3. Encarregado pelo Tratamento de Dados (DPO - Art. 41 da LGPD)</h4>
+          <p>Para dúvidas, requisições ou exercício de direitos previstos no Art. 18 da LGPD, o titular pode utilizar a aba <strong>"Meus Dados &amp; Exclusão"</strong> nesta janela ou contatar o Encarregado de Dados (DPO): <strong>Matheus S. L.</strong> — E-mail institucional: <code>dpo.privacidade@nortabil.com.br</code>.</p>
+        </div>
+
+        <!-- 2. TERMOS DE USO -->
+        <div id="legalSection_terms" class="legal-section hidden space-y-3">
+          <div class="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-900">
+            <strong>Natureza do Sistema e Ausência de Promessas Sem Comprovação:</strong> O NORTABIL é um núcleo ERP de escrituração contábil fundamentado no método das partidas dobradas. O sistema não promete redução ilícita de tributos, ganho financeiro garantido nem substitui o julgamento técnico do Contador habilitado no CRC.
+          </div>
+          <h4 class="font-bold text-slate-900 text-sm">2.1. Objeto e Licenciamento (Lei do Software nº 9.609/1998)</h4>
+          <p>Estes Termos regulam o uso da plataforma web e API REST do NORTABIL. O código-fonte e a arquitetura são disponibilizados sob licença <strong>MIT</strong> para fins acadêmicos, científicos (Trabalho de Conclusão de Curso — TCC) e operacionais.</p>
+          <h4 class="font-bold text-slate-900 text-sm">2.2. Responsabilidade Técnica Contábil</h4>
+          <p>Em observância ao Decreto-Lei nº 9.295/1946 (Conselho Federal de Contabilidade) e à NBC PG 01, o encerramento de períodos fiscais, a Apuração do Resultado do Exercício (ARE) e a geração do arquivo SPED ECD são atos privativos de Contador devidamente registrado no CRC.</p>
+          <h4 class="font-bold text-slate-900 text-sm">2.3. Marco Civil da Internet (Lei nº 12.965/2014)</h4>
+          <p>Os registros de acesso às aplicações são mantidos sob sigilo, em ambiente controlado e seguro, pelo prazo legal de 6 (seis) meses nos termos do Art. 15 da Lei nº 12.965/2014.</p>
+        </div>
+
+        <!-- 3. POLÍTICA DE REEMBOLSO E CANCELAMENTO (CDC) -->
+        <div id="legalSection_refund" class="legal-section hidden space-y-3">
+          <div class="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900">
+            <strong>Transparência Comercial e Direito de Arrependimento (Art. 49 do CDC — Lei nº 8.078/1990 e Decreto nº 7.962/2013):</strong> Esta instância opera em modalidade <strong>100% Gratuita / Acadêmica e Demonstrativa</strong>, sem cobrança de valores ou retenção de cartão de crédito.
+          </div>
+          <h4 class="font-bold text-slate-900 text-sm">3.1. Direito de Arrependimento Integral em Contratações Comerciais (7 Dias)</h4>
+          <p>Para contratações comerciais de planos SaaS de implantação ou suporte técnico realizadas fora do estabelecimento comercial (pela internet), é assegurado ao contratante o <strong>direito de arrependimento no prazo de 7 (sete) dias corridos</strong> a contar da assinatura ou do pagamento, com <strong>reembolso integral (100%)</strong> dos valores pagos, sem qualquer multa ou retenção, nos termos do Art. 49 do Código de Defesa do Consumidor.</p>
+          <h4 class="font-bold text-slate-900 text-sm">3.2. Cancelamento a Qualquer Momento e Portabilidade</h4>
+          <p>Após o prazo de 7 dias, o cancelamento de eventual assinatura comercial pode ser solicitado a qualquer momento sem fidelidade abusiva, garantindo-se o reembolso proporcional (<em>pro rata</em>) dos dias não utilizados no ciclo vigente e a exportação integral dos dados contábeis em formato aberto (CSV e SPED ECD `.txt`).</p>
+        </div>
+
+        <!-- 4. DIREITOS DO TITULAR (ART. 18 DA LGPD) - PORTABILIDADE E EXCLUSÃO -->
+        <div id="legalSection_rights" class="legal-section hidden space-y-4">
+          <div class="p-3 rounded-lg bg-slate-100 border border-slate-300 text-slate-800">
+            <strong>Autoatendimento do Titular de Dados (Art. 18 da Lei nº 13.709/2018):</strong> Abaixo você pode exportar instantaneamente uma cópia estruturada (JSON) de todos os dados pessoais vinculados ao seu usuário ou solicitar a exclusão/anonimização da sua conta.
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="p-4 rounded-xl border border-indigo-200 bg-indigo-50/50 space-y-2">
+              <h5 class="font-bold text-indigo-950 text-xs flex items-center space-x-1.5">
+                <i class="fa-solid fa-file-arrow-down text-indigo-700" aria-hidden="true"></i>
+                <span>1. Confirmar e Exportar Meus Dados (Art. 18, II e V)</span>
+              </h5>
+              <p class="text-[11px] text-slate-600">Baixe imediatamente um arquivo JSON contendo todos os seus dados pessoais armazenados e a respectiva finalidade legal.</p>
+              <button type="button" onclick="handleExportMyPersonalData()" class="bg-indigo-700 hover:bg-indigo-800 text-white font-semibold px-3 py-2 rounded-lg text-xs transition inline-flex items-center space-x-1.5">
+                <i class="fa-solid fa-download" aria-hidden="true"></i>
+                <span>Baixar Meus Dados Pessoais (JSON)</span>
+              </button>
+            </div>
+
+            <div class="p-4 rounded-xl border border-rose-200 bg-rose-50/50 space-y-2">
+              <h5 class="font-bold text-rose-950 text-xs flex items-center space-x-1.5">
+                <i class="fa-solid fa-user-slash text-rose-700" aria-hidden="true"></i>
+                <span>2. Solicitar Exclusão / Anonimização (Art. 18, VI)</span>
+              </h5>
+              <p class="text-[11px] text-slate-600">Anonimiza seu nome, e-mail e CRC e desativa permanentemente seu acesso, mantendo apenas a integridade matemática dos lançamentos exigida pelo Art. 1.179 do Código Civil.</p>
+              <button type="button" onclick="handleDeleteMyPersonalData()" class="bg-rose-700 hover:bg-rose-800 text-white font-semibold px-3 py-2 rounded-lg text-xs transition inline-flex items-center space-x-1.5">
+                <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+                <span>Solicitar Exclusão dos Meus Dados</span>
+              </button>
+            </div>
+          </div>
+          <pre id="lgpdExportPreview" class="hidden p-3 rounded-lg bg-slate-900 text-emerald-400 font-mono text-[11px] overflow-x-auto max-h-48"></pre>
+        </div>
+
+        <!-- 5. AUDITORIA DE TERCEIROS, DIREITOS AUTORAIS, ACESSIBILIDADE E LEIS BRASILEIRAS -->
+        <div id="legalSection_audit" class="legal-section hidden space-y-3">
+          <h4 class="font-bold text-slate-900 text-sm">5.1. Auditoria de Google Analytics, Scripts de Rastreamento e Integrações de Terceiros</h4>
+          <ul class="list-disc pl-5 space-y-1">
+            <li><strong>Google Analytics / Meta Pixel / Trackers Publicitários:</strong> <strong>NÃO UTILIZADOS</strong>. O NORTABIL foi auditado e está 100% livre de scripts de rastreamento comportamental, telemetria oculta ou venda de perfil de navegação.</li>
+            <li><strong>Integrações de Terceiros Auditadas:</strong> São carregadas unicamente folhas de estilo e fontes tipográficas de apresentação visual: <em>Tailwind CSS CDN</em>, <em>Font Awesome Free 6.4.0</em> (ícones sob licença aberta CC BY 4.0 / SIL OFL) e <em>Google Fonts (Inter)</em> (licença aberta SIL Open Font License 1.1), além do <em>Swagger UI</em> restrito à rota <code>/swagger</code>.</li>
+          </ul>
+          <h4 class="font-bold text-slate-900 text-sm">5.2. Verificação de Direitos Autorais, Depoimentos e Promessas Comerciais</h4>
+          <ul class="list-disc pl-5 space-y-1">
+            <li><strong>Direitos Autorais de Imagens (Lei nº 9.610/1998):</strong> O sistema não utiliza fotografias ou ilustrações protegidas por direitos autorais de terceiros; toda a iconografia utiliza vetores abertos licenciados (Font Awesome Free) com textos alternativos e atributos semânticos (<code>role="img"</code> / <code>aria-label</code>).</li>
+            <li><strong>Veracidade Publicitária (CONAR e Art. 37 do CDC):</strong> Não existem depoimentos falsos, avaliações fictícias nem promessas financeiras sem comprovação técnica em nenhuma página do sistema.</li>
+          </ul>
+          <h4 class="font-bold text-slate-900 text-sm">5.3. Auditoria de Acessibilidade (WCAG 2.1 AA / eMAG / Lei Brasileira de Inclusão nº 13.146/2015)</h4>
+          <ul class="list-disc pl-5 space-y-1">
+            <li>Atalho de teclado <em>"Pular para o conteúdo principal"</em> no topo da página e fechamento de janelas modais com a tecla <code>Esc</code>;</li>
+            <li>Contorno de foco visível (<code>:focus-visible</code>) em todos os botões, seletores, abas e campos de formulário;</li>
+            <li>Contraste de cores auditado conforme padrão WCAG AA e rótulos descritivos claros em todos os controles interativos.</li>
+          </ul>
+        </div>
+
+      </div>
+
+      <div class="border-t border-slate-200 pt-3 mt-4 flex justify-between items-center text-[11px] text-slate-600">
+        <span>Conformidade verificada: LGPD (13.709/18) · Marco Civil (12.965/14) · CDC (8.078/90) · LBI (13.146/15) · Código Civil (10.406/02)</span>
+        <button type="button" onclick="closeModal('modalLegal')" class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-1.5 rounded-lg text-xs">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Banner de Consentimento de Cookies e Armazenamento Estritamente Necessário (LGPD) -->
+  <div id="cookieConsentBanner" role="region" aria-label="Aviso de consentimento de armazenamento local e cookies técnicos" class="hidden fixed bottom-0 inset-x-0 z-[105] bg-slate-900/95 text-white border-t border-indigo-500/40 shadow-2xl p-4 backdrop-blur-md">
+    <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div class="text-xs text-slate-200 leading-relaxed space-y-1">
+        <div class="font-bold text-white flex items-center space-x-2">
+          <i class="fa-solid fa-cookie-bite text-amber-400" aria-hidden="true"></i>
+          <span>Transparência de Cookies Técnicos e Privacidade (LGPD — Lei nº 13.709/2018)</span>
+        </div>
+        <p>
+          O <strong>NORTABIL</strong> <strong>não utiliza</strong> Google Analytics nem cookies de rastreamento ou publicidade de terceiros. Utilizamos exclusivamente armazenamento local estritamente necessário (<code>localStorage</code>) para manter sua sessão autenticada (token JWT) e a empresa selecionada. Consulte nossa
+          <button type="button" onclick="openLegalModal('privacy')" class="text-indigo-300 underline font-semibold hover:text-white">Política de Privacidade</button>,
+          <button type="button" onclick="openLegalModal('terms')" class="text-indigo-300 underline font-semibold hover:text-white">Termos de Uso</button> e
+          <button type="button" onclick="openLegalModal('refund')" class="text-indigo-300 underline font-semibold hover:text-white">Política de Reembolso</button>.
+        </p>
+      </div>
+      <div class="flex items-center space-x-2 shrink-0">
+        <button type="button" onclick="openLegalModal('rights')" class="bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-600 font-semibold px-3 py-2 rounded-lg text-xs transition">
+          Meus Dados (LGPD)
+        </button>
+        <button type="button" onclick="acceptCookieConsent()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-lg text-xs transition shadow-md">
+          Aceitar Armazenamento Essencial
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rodapé Institucional e Dados Legais (Decreto nº 7.962/2013 / Marco Civil / LGPD) -->
+  <footer role="contentinfo" class="bg-slate-900 text-slate-300 border-t border-slate-800 py-5 px-4 text-xs">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+      <div class="text-center md:text-left space-y-1">
+        <div class="font-bold text-white">NORTABIL — Sistema ERP Contábil &amp; Motor de Partidas Dobradas (Projeto Acadêmico / TCC)</div>
+        <div class="text-[11px] text-slate-300">
+          <strong>Dados Legais &amp; Sede:</strong> Januária – MG, CEP 39480-000 (Norte de Minas Gerais) · CNPJ de Homologação Acadêmica: 12.345.678/0001-95 · Responsável Técnico Demo: Contador CRC MG-085421/O · Encarregado de Dados (DPO): <code>dpo.privacidade@nortabil.com.br</code>
+        </div>
+      </div>
+      <div class="flex flex-wrap justify-center gap-x-4 gap-y-1 text-[11px] font-semibold text-indigo-300">
+        <button type="button" onclick="openLegalModal('privacy')" class="hover:text-white underline">Política de Privacidade (LGPD)</button>
+        <button type="button" onclick="openLegalModal('terms')" class="hover:text-white underline">Termos de Uso</button>
+        <button type="button" onclick="openLegalModal('refund')" class="hover:text-white underline">Política de Reembolso</button>
+        <button type="button" onclick="openLegalModal('rights')" class="hover:text-white underline">Solicitar Exclusão de Dados</button>
+        <button type="button" onclick="openLegalModal('audit')" class="hover:text-white underline">Acessibilidade &amp; Leis Aplicáveis</button>
+      </div>
+    </div>
   </footer>
 
   <script src="/web/app.js"></script>

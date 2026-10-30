@@ -36,6 +36,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (ledgerStart) ledgerStart.value = `${currentYear}-01-01`;
   if (ledgerEnd) ledgerEnd.value = `${currentYear}-12-31`;
 
+  initCookieConsentBanner();
+  initKeyboardAccessibility();
+
   const loggedIn = await initAuthSession();
   if (loggedIn) {
     await loadCompanies();
@@ -1564,10 +1567,143 @@ function printReport(type) {
 }
 
 // ==========================================
-// UTILITÁRIOS
+// UTILITÁRIOS E CONFORMIDADE JURÍDICA / LGPD / ACESSIBILIDADE
 // ==========================================
 function formatBRL(val) {
   const n = parseFloat(val) || 0;
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
+
+function initCookieConsentBanner() {
+  const accepted = localStorage.getItem('nortabil_cookie_consent_v1');
+  const banner = document.getElementById('cookieConsentBanner');
+  if (banner && !accepted) {
+    banner.classList.remove('hidden');
+  }
+}
+
+function acceptCookieConsent() {
+  localStorage.setItem('nortabil_cookie_consent_v1', new Date().toISOString());
+  const banner = document.getElementById('cookieConsentBanner');
+  if (banner) {
+    banner.classList.add('hidden');
+  }
+}
+
+function initKeyboardAccessibility() {
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      ['modalLegal', 'modalUsers', 'modalNewAccount', 'modalNewCompany'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && !el.classList.contains('hidden')) {
+          closeModal(id);
+        }
+      });
+    }
+  });
+}
+
+function openLegalModal(section = 'privacy') {
+  openModal('modalLegal');
+  switchLegalSection(section);
+}
+
+function switchLegalSection(section) {
+  const sections = ['privacy', 'terms', 'refund', 'rights', 'audit'];
+  sections.forEach(s => {
+    const div = document.getElementById(`legalSection_${s}`);
+    if (div) {
+      if (s === section) {
+        div.classList.remove('hidden');
+      } else {
+        div.classList.add('hidden');
+      }
+    }
+  });
+
+  const btnMap = {
+    privacy: 'btnLegalPrivacy',
+    terms: 'btnLegalTerms',
+    refund: 'btnLegalRefund',
+    rights: 'btnLegalRights',
+    audit: 'btnLegalAudit'
+  };
+
+  Object.entries(btnMap).forEach(([key, btnId]) => {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    if (key === section) {
+      btn.className = 'legal-tab-btn px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-700 text-white transition';
+    } else {
+      btn.className = 'legal-tab-btn px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition';
+    }
+  });
+}
+
+async function handleExportMyPersonalData() {
+  if (!authToken) {
+    showAlert('Faça login no sistema primeiro para exportar os dados pessoais vinculados à sua conta.', 'error');
+    closeModal('modalLegal');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/v1/auth/lgpd/export');
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json.error?.message || 'Erro ao exportar dados pessoais.');
+    }
+
+    const formatted = JSON.stringify(json.data, null, 2);
+    const preview = document.getElementById('lgpdExportPreview');
+    if (preview) {
+      preview.textContent = formatted;
+      preview.classList.remove('hidden');
+    }
+
+    const blob = new Blob([formatted], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `meus_dados_lgpd_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showAlert('Seus dados pessoais foram exportados com sucesso (Art. 18, II e V da LGPD).');
+  } catch (err) {
+    showAlert('Falha ao exportar dados pessoais: ' + err.message, 'error');
+  }
+}
+
+async function handleDeleteMyPersonalData() {
+  if (!authToken) {
+    showAlert('Faça login no sistema primeiro para solicitar a exclusão/anonimização da sua conta.', 'error');
+    closeModal('modalLegal');
+    return;
+  }
+
+  const confirmed = confirm(
+    'CONFIRMAÇÃO DE DIREITO DE EXCLUSÃO (ART. 18, VI DA LGPD):\n\n' +
+    'Deseja realmente anonimizar seus dados pessoais (Nome, E-mail e CRC) e desativar permanentemente seu acesso ao sistema?\n\n' +
+    'Nota Legal: Os lançamentos contábeis já escriturados permanecerão íntegros conforme exigência do Art. 1.179 do Código Civil.'
+  );
+  if (!confirmed) return;
+
+  try {
+    const res = await fetch('/api/v1/auth/lgpd/delete-account', { method: 'DELETE' });
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json.error?.message || 'Não foi possível concluir a exclusão.');
+    }
+
+    closeModal('modalLegal');
+    handleLogout();
+    alert(json.data?.message || 'Conta anonimizada e desativada conforme a LGPD.');
+  } catch (err) {
+    alert('Aviso de Conformidade LGPD:\n' + err.message);
+  }
+}
+
 

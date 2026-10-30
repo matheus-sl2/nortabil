@@ -126,6 +126,8 @@ func SetupRouter(
 			api.Route("/auth", func(auth chi.Router) {
 				auth.Post("/login", authHandler.Login)
 				auth.Get("/me", authHandler.Me)
+				auth.Get("/lgpd/export", authHandler.ExportMyData)
+				auth.Delete("/lgpd/delete-account", authHandler.DeleteMyData)
 				// Gestão de usuários restrita ao perfil ADMIN (impede autocadastro de administradores)
 				auth.With(middleware.RequireRole(domain.RoleAdmin)).Post("/register", authHandler.Register)
 				auth.With(middleware.RequireRole(domain.RoleAdmin)).Get("/users", authHandler.ListUsers)

@@ -93,3 +93,40 @@ func (h *AuthHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusOK, users)
 }
 
+// ExportMyData exporta todos os dados pessoais do titular autenticado em formato estruturado (Art. 18, II e V da LGPD)
+func (h *AuthHandler) ExportMyData(w http.ResponseWriter, r *http.Request) {
+	uidVal := r.Context().Value(middleware.ContextUserID)
+	if uidVal == nil {
+		JSONError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Nenhum usuário autenticado", nil)
+		return
+	}
+	uid, _ := uidVal.(uuid.UUID)
+
+	data, err := h.authService.ExportPersonalData(r.Context(), uid)
+	if err != nil {
+		HandleDomainError(w, err)
+		return
+	}
+	JSON(w, http.StatusOK, data)
+}
+
+// DeleteMyData processa a solicitação de exclusão/anonimização dos dados pessoais do titular (Art. 18, VI da LGPD)
+func (h *AuthHandler) DeleteMyData(w http.ResponseWriter, r *http.Request) {
+	uidVal := r.Context().Value(middleware.ContextUserID)
+	if uidVal == nil {
+		JSONError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Nenhum usuário autenticado", nil)
+		return
+	}
+	uid, _ := uidVal.(uuid.UUID)
+
+	if err := h.authService.RequestAccountDeletion(r.Context(), uid); err != nil {
+		HandleDomainError(w, err)
+		return
+	}
+
+	JSON(w, http.StatusOK, map[string]interface{}{
+		"message": "Seus dados pessoais identificáveis foram anonimizados e sua conta foi desativada em conformidade com o Art. 18, VI da Lei nº 13.709/2018 (LGPD).",
+	})
+}
+
+

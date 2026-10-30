@@ -163,3 +163,42 @@ func (s *AuthService) ListUsers(ctx context.Context) ([]domain.User, error) {
 	return s.userRepo.List(ctx)
 }
 
+// ExportPersonalData retorna todos os dados pessoais armazenados sobre o titular autenticado (Art. 18, II e V da LGPD)
+func (s *AuthService) ExportPersonalData(ctx context.Context, userID uuid.UUID) (map[string]interface{}, error) {
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{
+		"lgpd_legal_basis": "Lei nº 13.709/2018 (LGPD) - Art. 7º, II (Cumprimento de obrigação legal/regulatória contábil) e V (Execução de contrato)",
+		"exported_at":      time.Now().UTC().Format(time.RFC3339),
+		"personal_data": map[string]interface{}{
+			"id":         user.ID,
+			"name":       user.Name,
+			"email":      user.Email,
+			"role":       user.Role,
+			"crc_number": user.CRCNumber,
+			"active":     user.Active,
+			"created_at": user.CreatedAt,
+			"updated_at": user.UpdatedAt,
+		},
+		"retention_notice": "A escrituração contábil associada à responsabilidade técnica é conservada pelo prazo legal prescricional (Código Civil Art. 1.179, CTN Art. 173 e 195). Dados pessoais identificáveis da conta podem ser anonimizados a pedido do titular.",
+	}, nil
+}
+
+// RequestAccountDeletion anonimiza e desativa os dados pessoais da conta do titular (Art. 18, VI da LGPD)
+func (s *AuthService) RequestAccountDeletion(ctx context.Context, userID uuid.UUID) error {
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	// Protege as 3 contas de demonstração padrão do TCC contra exclusão acidental durante a banca/testes,
+	// permitindo testar o fluxo completo com retorno explícito ou excluir contas reais criadas no sistema.
+	switch user.Email {
+	case "contador@nortabil.com.br", "admin@nortabil.com.br", "assistente@nortabil.com.br":
+		return errors.New("proteção de ambiente de homologação/TCC: esta conta institucional de demonstração possui bloqueio contra exclusão permanente. Para testar a exclusão efetiva (Art. 18, VI da LGPD), cadastre um novo usuário e solicite a eliminação a partir dele")
+	}
+	return s.userRepo.AnonymizeAndDeactivate(ctx, userID)
+}
+
+

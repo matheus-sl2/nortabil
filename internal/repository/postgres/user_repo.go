@@ -146,3 +146,27 @@ func (r *UserRepository) List(ctx context.Context) ([]domain.User, error) {
 	return users, nil
 }
 
+// AnonymizeAndDeactivate executa a eliminação/anonimização dos dados pessoais de um usuário (Direito do Titular - Art. 18, VI da LGPD),
+// preservando a integridade referencial dos lançamentos contábeis exigida pelo Código Civil (Art. 1.179) e NBC TG.
+func (r *UserRepository) AnonymizeAndDeactivate(ctx context.Context, id uuid.UUID) error {
+	anonEmail := fmt.Sprintf("anonimizado.%s@titular-excluido.lgpd.local", id.String()[:8])
+	query := `
+		UPDATE users
+		SET name = 'Titular Anonimizado (LGPD Art. 18)',
+		    email = $2,
+		    crc_number = '',
+		    active = false,
+		    updated_at = NOW()
+		WHERE id = $1
+	`
+	tag, err := r.db.Pool.Exec(ctx, query, id, anonEmail)
+	if err != nil {
+		return fmt.Errorf("erro ao anonimizar dados do titular: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return domain.ErrUserNotFound
+	}
+	return nil
+}
+
+
