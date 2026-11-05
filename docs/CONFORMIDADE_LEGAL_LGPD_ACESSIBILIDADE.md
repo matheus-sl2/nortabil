@@ -108,3 +108,4 @@ Em cumprimento à **Lei Brasileira de Inclusão (Lei nº 13.146/2015, Art. 63)**
 | **Lei nº 10.406/2002 (Código Civil, Art. 1.179 a 1.195)** | Obrigatoriedade da escrituração contábil uniforme em partidas dobradas, Livro Diário e Balanço Patrimonial. |
 | **Lei nº 6.404/1976 (Lei das S/A)** | Estrutura legal da DRE, Balanço Patrimonial e Demonstração dos Fluxos de Caixa (DFC). |
 | **NBC TG 26, NBC TG 03, NBC TG 16 e NBC ITG 2000 (CFC)** | Formalidades da escrituração contábil digital, estorno por partida inversa, estoques/CMV e responsabilidade técnica CRC. |
+
