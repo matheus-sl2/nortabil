@@ -2,10 +2,12 @@ package handler
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/matheus-sl2/nortabil/internal/middleware"
 	"github.com/matheus-sl2/nortabil/internal/service"
@@ -117,5 +119,97 @@ func (h *ReconciliationHandler) ListItems(w http.ResponseWriter, r *http.Request
 	}
 
 	JSON(w, http.StatusOK, items)
+}
+
+// UploadOFXForTriage carrega o arquivo OFX sem contabilizar de imediato, preparando os itens para classificação individual
+func (h *ReconciliationHandler) UploadOFXForTriage(w http.ResponseWriter, r *http.Request) {
+	companyID := middleware.GetCompanyID(r)
+
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		JSONError(w, http.StatusBadRequest, "INVALID_FORM", "Falha ao processar formulário multipart", err.Error())
+		return
+	}
+
+	bankAccountID, err := uuid.Parse(r.FormValue("bank_account_id"))
+	if err != nil {
+		JSONError(w, http.StatusBadRequest, "INVALID_UUID", "bank_account_id inválido", nil)
+		return
+	}
+
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		JSONError(w, http.StatusBadRequest, "MISSING_FILE", "Arquivo 'file' não fornecido na requisição", nil)
+		return
+	}
+	defer file.Close()
+
+	buf := new(bytes.Buffer)
+	_, _ = io.Copy(buf, file)
+
+	summary, err := h.ofxService.UploadOFXForTriage(r.Context(), companyID, bankAccountID, buf)
+	if err != nil {
+		HandleDomainError(w, err)
+		return
+	}
+
+	JSON(w, http.StatusOK, summary)
+}
+
+type confirmReconciliationRequest struct {
+	Items []service.ConfirmReconciliationItemInput `json:"items"`
+}
+
+// ConfirmReconciliation efetiva em partidas dobradas os itens classificados e opcionalmente salva as regras
+func (h *ReconciliationHandler) ConfirmReconciliation(w http.ResponseWriter, r *http.Request) {
+	companyID := middleware.GetCompanyID(r)
+
+	var req confirmReconciliationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		JSONError(w, http.StatusBadRequest, "INVALID_JSON", "Payload JSON inválido", err.Error())
+		return
+	}
+
+	if len(req.Items) == 0 {
+		JSONError(w, http.StatusBadRequest, "EMPTY_ITEMS", "Nenhum item selecionado para contabilização", nil)
+		return
+	}
+
+	summary, err := h.ofxService.ConfirmReconciliation(r.Context(), companyID, req.Items)
+	if err != nil {
+		HandleDomainError(w, err)
+		return
+	}
+
+	JSON(w, http.StatusOK, summary)
+}
+
+// ListRules lista as regras memorizadas de classificação bancária
+func (h *ReconciliationHandler) ListRules(w http.ResponseWriter, r *http.Request) {
+	companyID := middleware.GetCompanyID(r)
+
+	rules, err := h.ofxService.ListRules(r.Context(), companyID)
+	if err != nil {
+		HandleDomainError(w, err)
+		return
+	}
+
+	JSON(w, http.StatusOK, rules)
+}
+
+// DeleteRule exclui uma regra memorizada
+func (h *ReconciliationHandler) DeleteRule(w http.ResponseWriter, r *http.Request) {
+	companyID := middleware.GetCompanyID(r)
+	ruleID, err := uuid.Parse(chi.URLParam(r, "ruleId"))
+	if err != nil {
+		JSONError(w, http.StatusBadRequest, "INVALID_UUID", "ruleId inválido", nil)
+		return
+	}
+
+	if err := h.ofxService.DeleteRule(r.Context(), companyID, ruleID); err != nil {
+		HandleDomainError(w, err)
+		return
+	}
+
+	JSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 

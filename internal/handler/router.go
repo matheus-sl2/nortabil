@@ -180,7 +180,11 @@ func SetupRouter(
 
 				sub.Route("/reconciliation", func(rec chi.Router) {
 					rec.Post("/import-ofx", reconciliationHandler.ImportOFX)
+					rec.Post("/upload-ofx", reconciliationHandler.UploadOFXForTriage)
+					rec.Post("/confirm", reconciliationHandler.ConfirmReconciliation)
 					rec.Get("/items", reconciliationHandler.ListItems)
+					rec.Get("/rules", reconciliationHandler.ListRules)
+					rec.Delete("/rules/{ruleId}", reconciliationHandler.DeleteRule)
 				})
 
 				if nfeHandler != nil {
@@ -234,7 +238,11 @@ func SetupRouter(
 
 			tenantGroup.Route("/reconciliation", func(rec chi.Router) {
 				rec.Post("/import-ofx", reconciliationHandler.ImportOFX)
+				rec.Post("/upload-ofx", reconciliationHandler.UploadOFXForTriage)
+				rec.Post("/confirm", reconciliationHandler.ConfirmReconciliation)
 				rec.Get("/items", reconciliationHandler.ListItems)
+				rec.Get("/rules", reconciliationHandler.ListRules)
+				rec.Delete("/rules/{ruleId}", reconciliationHandler.DeleteRule)
 			})
 
 			if nfeHandler != nil {

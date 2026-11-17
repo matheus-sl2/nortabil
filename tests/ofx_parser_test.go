@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	"github.com/matheus-sl2/nortabil/internal/domain"
 )
@@ -225,4 +226,63 @@ func TestOFXParseDateFormats(t *testing.T) {
 	checkDate("20261029143000[-03:EST]", 2026, time.October, 29)
 	checkDate("20261029", 2026, time.October, 29)
 	checkDate("2026-10-29", 2026, time.October, 29)
+}
+
+// TestReconciliationPatternNormalizationAndMatching testa a normalização de históricos bancários e o match por direção (INFLOW vs OUTFLOW)
+func TestReconciliationPatternNormalizationAndMatching(t *testing.T) {
+	pat1 := domain.NormalizeMemoPattern("PIX RECEBIDO 15/10/2026 CLIENTE MONTE CARMELO 987654321")
+	if pat1 != "PIX RECEBIDO CLIENTE MONTE CARMELO" {
+		t.Errorf("Padrão normalizado inesperado: %q", pat1)
+	}
+
+	pat2 := domain.NormalizeMemoPattern("TARIFA BANCARIA CESTA PJ 10/2026")
+	if pat2 != "TARIFA BANCARIA CESTA PJ 10/2026" && !strings.Contains(pat2, "TARIFA BANCARIA CESTA PJ") {
+		t.Errorf("Padrão de tarifa inesperado: %q", pat2)
+	}
+
+	accTarifa := uuid.New()
+	accClientes := uuid.New()
+	accEnergia := uuid.New()
+
+	rules := []domain.ReconciliationRule{
+		{
+			ID:                   uuid.New(),
+			Pattern:              "TARIFA BANCARIA",
+			Direction:            domain.DirectionOutflow,
+			CounterpartAccountID: accTarifa,
+			HitCount:             3,
+		},
+		{
+			ID:                   uuid.New(),
+			Pattern:              "PIX RECEBIDO",
+			Direction:            domain.DirectionInflow,
+			CounterpartAccountID: accClientes,
+			HitCount:             5,
+		},
+		{
+			ID:                   uuid.New(),
+			Pattern:              "CEMIG ENERGIA",
+			Direction:            domain.DirectionOutflow,
+			CounterpartAccountID: accEnergia,
+			HitCount:             2,
+		},
+	}
+
+	// Saída de tarifa -> deve dar match na conta de Tarifa
+	m1 := domain.MatchReconciliationRule("TARIFA BANCARIA CESTA PJ 15/10", domain.DirectionOutflow, rules)
+	if m1 == nil || m1.CounterpartAccountID != accTarifa {
+		t.Fatalf("Esperava match na conta de tarifa, obteve %+v", m1)
+	}
+
+	// Mesma palavra-chave mas como ENTRADA (INFLOW) -> não deve aplicar regra de OUTFLOW
+	mWrongDir := domain.MatchReconciliationRule("ESTORNO TARIFA BANCARIA", domain.DirectionInflow, rules)
+	if mWrongDir != nil {
+		t.Errorf("Não deveria casar regra OUTFLOW em transação INFLOW, obteve %+v", mWrongDir)
+	}
+
+	// Entrada PIX -> deve dar match na conta de Clientes
+	m2 := domain.MatchReconciliationRule("PIX RECEBIDO 18/10/2026 MARIA 123456", domain.DirectionInflow, rules)
+	if m2 == nil || m2.CounterpartAccountID != accClientes {
+		t.Fatalf("Esperava match na conta de clientes, obteve %+v", m2)
+	}
 }

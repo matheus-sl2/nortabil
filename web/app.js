@@ -57,6 +57,9 @@ function showLoginScreen() {
   if (screen) {
     screen.classList.remove('hidden');
     screen.classList.add('flex');
+    setTimeout(() => {
+      document.getElementById('loginEmail')?.focus();
+    }, 50);
   }
 }
 
@@ -156,6 +159,25 @@ async function handleLogin(e) {
   await performLogin(email, password);
 }
 
+function toggleLoginPasswordVisibility() {
+  const input = document.getElementById('loginPassword');
+  const icon = document.getElementById('iconTogglePassword');
+  const btn = document.getElementById('btnTogglePassword');
+  if (!input || !icon) return;
+
+  if (input.type === 'password') {
+    input.type = 'text';
+    icon.classList.remove('fa-eye');
+    icon.classList.add('fa-eye-slash');
+    if (btn) btn.setAttribute('aria-label', 'Ocultar senha');
+  } else {
+    input.type = 'password';
+    icon.classList.remove('fa-eye-slash');
+    icon.classList.add('fa-eye');
+    if (btn) btn.setAttribute('aria-label', 'Mostrar senha em texto puro');
+  }
+}
+
 function handleLogout() {
   authToken = '';
   currentUser = null;
@@ -166,7 +188,17 @@ function handleLogout() {
   const passInput = document.getElementById('loginPassword');
   const errBox = document.getElementById('loginErrorBox');
   if (emailInput) emailInput.value = '';
-  if (passInput) passInput.value = '';
+  if (passInput) {
+    passInput.value = '';
+    passInput.type = 'password';
+  }
+  const icon = document.getElementById('iconTogglePassword');
+  if (icon) {
+    icon.classList.remove('fa-eye-slash');
+    icon.classList.add('fa-eye');
+  }
+  const toggleBtn = document.getElementById('btnTogglePassword');
+  if (toggleBtn) toggleBtn.setAttribute('aria-label', 'Mostrar senha em texto puro');
   if (errBox) errBox.classList.add('hidden');
 
   updateAuthUI();
@@ -303,6 +335,11 @@ function closeModal(modalId) {
   if (m) {
     m.classList.add('hidden');
     m.classList.remove('flex');
+    if (modalId === 'modalLegal' && lastLegalTrigger && typeof lastLegalTrigger.focus === 'function') {
+      const target = lastLegalTrigger;
+      lastLegalTrigger = null;
+      setTimeout(() => target.focus(), 30);
+    }
   }
 }
 
@@ -896,33 +933,89 @@ async function loadLedgerReport() {
 }
 
 // ==========================================
-// CONCILIAÇÃO BANCÁRIA OFX
+// CONCILIAÇÃO BANCÁRIA OFX (TRIAGEM + REGRAS)
 // ==========================================
+let ofxPendingItemsCache = [];
+let ofxReconciledItemsCache = [];
+let ofxRulesCache = [];
+let currentOFXSubTab = 'pending';
+
+function escapeHTML(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function populateOFXSelects() {
   const analyticalAccounts = cachedAccounts.filter(a => !a.is_synthetic);
   const bankSelect = document.getElementById('ofxBankAccount');
-  const counterpartSelect = document.getElementById('ofxCounterpartAccount');
+  if (!bankSelect) return;
 
-  if (!bankSelect || !counterpartSelect) return;
+  const prevVal = bankSelect.value;
+  let banks = analyticalAccounts.filter(a => a.code.startsWith('1.1.01'));
+  if (banks.length === 0) {
+    banks = analyticalAccounts.filter(a => a.type === 'ASSET');
+  }
 
-  const banks = analyticalAccounts.filter(a => a.code.startsWith('1.1.01'));
   bankSelect.innerHTML = '<option value="" disabled selected>Selecione a conta de banco...</option>' +
-    banks.map(a => `<option value="${a.id}">${a.code} - ${a.name}</option>`).join('');
+    banks.map(a => `<option value="${a.id}">${escapeHTML(a.code)} - ${escapeHTML(a.name)}</option>`).join('');
 
-  counterpartSelect.innerHTML = '<option value="" disabled selected>Selecione a contrapartida padrão...</option>' +
-    analyticalAccounts.map(a => `<option value="${a.id}">${a.code} - ${a.name}</option>`).join('');
+  if (prevVal && banks.some(b => b.id === prevVal)) {
+    bankSelect.value = prevVal;
+  } else if (banks.length > 0) {
+    bankSelect.value = banks[0].id;
+  }
 
-  bankSelect.onchange = () => loadReconciliationItems();
+  bankSelect.onchange = () => loadReconciliationData();
+  if (bankSelect.value) {
+    loadReconciliationData();
+  }
 }
 
-async function handleImportOFX(e) {
+function switchOFXSubTab(tab) {
+  currentOFXSubTab = tab;
+  const views = {
+    pending: document.getElementById('ofxPendingView'),
+    reconciled: document.getElementById('ofxReconciledView'),
+    rules: document.getElementById('ofxRulesView')
+  };
+  const buttons = {
+    pending: document.getElementById('btnOfxTabPending'),
+    reconciled: document.getElementById('btnOfxTabReconciled'),
+    rules: document.getElementById('btnOfxTabRules')
+  };
+
+  Object.entries(views).forEach(([k, el]) => {
+    if (!el) return;
+    if (k === tab) el.classList.remove('hidden');
+    else el.classList.add('hidden');
+  });
+
+  Object.entries(buttons).forEach(([k, btn]) => {
+    if (!btn) return;
+    if (k === tab) {
+      btn.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 text-white transition flex items-center space-x-1.5';
+    } else {
+      btn.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-slate-600 border border-slate-300 hover:bg-slate-100 transition flex items-center space-x-1.5';
+    }
+  });
+}
+
+async function handleUploadOFXForTriage(e) {
   e.preventDefault();
   if (!currentCompanyId) return;
 
   const bankId = document.getElementById('ofxBankAccount').value;
-  const counterpartId = document.getElementById('ofxCounterpartAccount').value;
   const fileInput = document.getElementById('ofxFile');
+  const btn = document.getElementById('btnSubmitOFX');
 
+  if (!bankId) {
+    showAlert('Selecione uma conta bancária do Ativo.', 'error');
+    return;
+  }
   if (!fileInput.files || fileInput.files.length === 0) {
     showAlert('Selecione um arquivo .OFX', 'error');
     return;
@@ -930,57 +1023,395 @@ async function handleImportOFX(e) {
 
   const formData = new FormData();
   formData.append('bank_account_id', bankId);
-  formData.append('counterpart_account_id', counterpartId);
   formData.append('file', fileInput.files[0]);
 
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><span>Carregando extrato...</span>';
+  }
+
   try {
-    const res = await fetch(`/api/v1/companies/${currentCompanyId}/reconciliation/import-ofx`, {
+    const res = await fetch(`/api/v1/companies/${currentCompanyId}/reconciliation/upload-ofx`, {
       method: 'POST',
       body: formData
     });
     const json = await res.json();
-    if (!json.success) throw new Error(json.message || json.error);
+    if (!res.ok || !json.success) throw new Error(json.error?.message || json.message || 'Falha ao ler arquivo OFX');
 
     const s = json.data;
-    showAlert(`Extrato processado! Lidas: ${s.total_read} | Importadas: ${s.total_imported} | Duplicadas ignoradas: ${s.total_duplicates}`);
+    showAlert(`Extrato carregado para classificação! Lidas: ${s.total_read} | Novas pendentes: ${s.total_imported} | Já importadas antes: ${s.total_duplicates}`);
     fileInput.value = '';
-    await loadReconciliationItems();
-    await loadJournalEntries();
-    await loadDashboard();
+    switchOFXSubTab('pending');
+    await loadReconciliationData();
   } catch (err) {
-    showAlert('Falha ao importar extrato OFX: ' + err.message, 'error');
+    showAlert('Falha ao carregar extrato OFX: ' + err.message, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-magnifying-glass-chart"></i><span>Carregar para Classificação</span>';
+    }
   }
 }
 
-async function loadReconciliationItems() {
+async function loadReconciliationData() {
+  if (!currentCompanyId) return;
   const bankId = document.getElementById('ofxBankAccount')?.value;
-  const tbody = document.getElementById('reconciliationTableBody');
-  if (!bankId || !tbody) return;
 
   try {
-    const res = await fetch(`/api/v1/companies/${currentCompanyId}/reconciliation/items?bank_account_id=${bankId}`);
-    const json = await res.json();
-    if (!json.success) throw new Error(json.message);
+    const rulesPromise = fetch(`/api/v1/companies/${currentCompanyId}/reconciliation/rules`).then(r => r.json()).catch(() => ({ success: false }));
+    const itemsPromise = bankId
+      ? fetch(`/api/v1/companies/${currentCompanyId}/reconciliation/items?bank_account_id=${bankId}`).then(r => r.json())
+      : Promise.resolve({ success: true, data: [] });
 
-    const items = json.data || [];
-    if (items.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-slate-400">Nenhuma transação importada para esta conta.</td></tr>';
+    const [itemsJson, rulesJson] = await Promise.all([itemsPromise, rulesPromise]);
+
+    const allItems = (itemsJson.success && Array.isArray(itemsJson.data)) ? itemsJson.data : [];
+    ofxPendingItemsCache = allItems.filter(it => !it.reconciled);
+    ofxReconciledItemsCache = allItems.filter(it => it.reconciled);
+    ofxRulesCache = (rulesJson.success && Array.isArray(rulesJson.data)) ? rulesJson.data : [];
+
+    const pendingCountEl = document.getElementById('ofxPendingCount');
+    const reconciledCountEl = document.getElementById('ofxReconciledCount');
+    const rulesCountEl = document.getElementById('ofxRulesCount');
+    if (pendingCountEl) pendingCountEl.innerText = ofxPendingItemsCache.length;
+    if (reconciledCountEl) reconciledCountEl.innerText = ofxReconciledItemsCache.length;
+    if (rulesCountEl) rulesCountEl.innerText = ofxRulesCache.length;
+
+    renderPendingOFXTable();
+    renderReconciledOFXTable();
+    renderOFXRulesTable();
+  } catch (err) {
+    console.error('Erro ao carregar dados de conciliação:', err);
+  }
+}
+
+function renderPendingOFXTable() {
+  const tbody = document.getElementById('ofxPendingTableBody');
+  const selectAllChk = document.getElementById('ofxSelectAllPending');
+  if (!tbody) return;
+
+  if (selectAllChk) selectAllChk.checked = false;
+
+  if (ofxPendingItemsCache.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-400">Nenhuma movimentação pendente de classificação para esta conta bancária.</td></tr>';
+    updateOFXSelectionSummary();
+    return;
+  }
+
+  const bankId = document.getElementById('ofxBankAccount')?.value;
+  const analyticalAccounts = cachedAccounts.filter(a => !a.is_synthetic && a.id !== bankId);
+
+  tbody.innerHTML = ofxPendingItemsCache.map(item => {
+    const isInflow = item.type === 'DEBIT'; // Na contabilidade: Entrada no banco = Débito no Ativo Banco
+    const suggestedId = item.suggested_account_id || '';
+    const hasSuggestion = Boolean(suggestedId);
+
+    const flowBadge = isInflow
+      ? `<span class="inline-block bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-[10px] font-bold">+ ENTRADA</span>`
+      : `<span class="inline-block bg-rose-100 text-rose-800 px-2 py-0.5 rounded text-[10px] font-bold">- SAÍDA</span>`;
+
+    const accountOptions = `<option value="">-- Selecione a conta contábil --</option>` +
+      analyticalAccounts.map(a => `<option value="${a.id}" ${a.id === suggestedId ? 'selected' : ''}>${escapeHTML(a.code)} - ${escapeHTML(a.name)}</option>`).join('');
+
+    const suggestionBadge = hasSuggestion
+      ? `<span id="ofx-badge-${item.id}" class="inline-flex items-center space-x-1 text-[10px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded mt-1"><i class="fa-solid fa-wand-magic-sparkles"></i><span>Sugerido por padrão</span></span>`
+      : `<span id="ofx-badge-${item.id}" class="inline-flex items-center space-x-1 text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded mt-1"><i class="fa-solid fa-tag"></i><span>Aguardando classificação</span></span>`;
+
+    const selectBorder = hasSuggestion ? 'border-indigo-300 bg-indigo-50/30' : 'border-amber-300 bg-amber-50/30';
+
+    return `
+      <tr class="hover:bg-slate-50 transition align-top" data-item-id="${item.id}">
+        <td class="px-3 py-3 text-center">
+          <input type="checkbox" id="ofx-chk-${item.id}" class="ofx-pending-chk rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 mt-1" ${hasSuggestion ? 'checked' : ''} onchange="updateOFXSelectionSummary()" />
+        </td>
+        <td class="px-3 py-3 whitespace-nowrap font-mono text-slate-700">
+          ${new Date(item.date).toLocaleDateString('pt-BR')}
+          <div class="text-[10px] text-slate-400 mt-0.5" title="FITID: ${escapeHTML(item.fitid)}">${escapeHTML(item.fitid).slice(-10)}</div>
+        </td>
+        <td class="px-3 py-3">
+          <div class="text-[11px] font-semibold text-slate-700 mb-1">${escapeHTML(item.memo || '(Sem histórico)')}</div>
+          <input type="text" id="ofx-desc-${item.id}" value="${escapeHTML(item.memo || '')}" placeholder="Histórico do lançamento..." class="w-full text-[11px] border border-slate-200 rounded px-2 py-1 text-slate-700 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+        </td>
+        <td class="px-3 py-3 whitespace-nowrap">${flowBadge}</td>
+        <td class="px-3 py-3 text-right font-mono font-bold whitespace-nowrap ${isInflow ? 'text-emerald-700' : 'text-rose-700'}">
+          ${isInflow ? '+' : '-'} ${formatBRL(item.amount)}
+        </td>
+        <td class="px-3 py-3">
+          <select id="ofx-acc-${item.id}" onchange="onOFXAccountChange('${item.id}')" class="w-full text-xs border ${selectBorder} rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            ${accountOptions}
+          </select>
+          <div>${suggestionBadge}</div>
+        </td>
+        <td class="px-3 py-3 text-center">
+          <input type="checkbox" id="ofx-learn-${item.id}" checked class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 mt-1.5" title="Memorizar este histórico para preencher automaticamente nos próximos extratos" />
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  updateOFXSelectionSummary();
+}
+
+function onOFXAccountChange(itemId) {
+  const select = document.getElementById(`ofx-acc-${itemId}`);
+  const chk = document.getElementById(`ofx-chk-${itemId}`);
+  const badge = document.getElementById(`ofx-badge-${itemId}`);
+  if (!select) return;
+
+  if (select.value) {
+    if (chk) chk.checked = true;
+    select.classList.remove('border-amber-300', 'bg-amber-50/30');
+    select.classList.add('border-emerald-300', 'bg-emerald-50/20');
+    if (badge) {
+      badge.className = 'inline-flex items-center space-x-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded mt-1';
+      badge.innerHTML = '<i class="fa-solid fa-pen"></i><span>Classificado / Editado</span>';
+    }
+  } else {
+    if (chk) chk.checked = false;
+    select.classList.remove('border-emerald-300', 'bg-emerald-50/20', 'border-indigo-300', 'bg-indigo-50/30');
+    select.classList.add('border-amber-300', 'bg-amber-50/30');
+    if (badge) {
+      badge.className = 'inline-flex items-center space-x-1 text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded mt-1';
+      badge.innerHTML = '<i class="fa-solid fa-tag"></i><span>Aguardando classificação</span>';
+    }
+  }
+  updateOFXSelectionSummary();
+}
+
+function toggleAllPendingOFX(checked) {
+  document.querySelectorAll('.ofx-pending-chk').forEach(chk => {
+    chk.checked = checked;
+  });
+  updateOFXSelectionSummary();
+}
+
+function updateOFXSelectionSummary() {
+  const summaryEl = document.getElementById('ofxSelectionSummary');
+  const btn = document.getElementById('btnConfirmOFXBatch');
+  if (!summaryEl) return;
+
+  let selected = 0;
+  let ready = 0;
+
+  ofxPendingItemsCache.forEach(item => {
+    const chk = document.getElementById(`ofx-chk-${item.id}`);
+    const acc = document.getElementById(`ofx-acc-${item.id}`);
+    if (chk && chk.checked) {
+      selected++;
+      if (acc && acc.value) ready++;
+    }
+  });
+
+  summaryEl.innerText = `${selected} selecionado(s) · ${ready} com conta definida`;
+  if (btn) btn.disabled = selected === 0;
+}
+
+async function confirmSelectedOFXItems() {
+  if (!currentCompanyId) return;
+
+  const payloadItems = [];
+  let missingAccountCount = 0;
+
+  ofxPendingItemsCache.forEach(item => {
+    const chk = document.getElementById(`ofx-chk-${item.id}`);
+    if (!chk || !chk.checked) return;
+
+    const accId = document.getElementById(`ofx-acc-${item.id}`)?.value || '';
+    const desc = document.getElementById(`ofx-desc-${item.id}`)?.value?.trim() || '';
+    const learnRule = Boolean(document.getElementById(`ofx-learn-${item.id}`)?.checked);
+
+    if (!accId) {
+      missingAccountCount++;
       return;
     }
 
-    tbody.innerHTML = items.map(item => `
+    payloadItems.push({
+      item_id: item.id,
+      counterpart_account_id: accId,
+      description: desc,
+      learn_rule: learnRule
+    });
+  });
+
+  if (missingAccountCount > 0) {
+    showAlert(`Existem ${missingAccountCount} movimentação(ões) marcada(s) sem Conta Contábil selecionada. Classifique ou desmarque antes de confirmar.`, 'error');
+    return;
+  }
+
+  if (payloadItems.length === 0) {
+    showAlert('Selecione ao menos uma movimentação classificada para contabilizar.', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('btnConfirmOFXBatch');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><span>Contabilizando...</span>';
+  }
+
+  try {
+    const res = await fetch(`/api/v1/companies/${currentCompanyId}/reconciliation/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: payloadItems })
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json.error?.message || json.message || 'Falha ao confirmar conciliação');
+    }
+
+    const r = json.data;
+    showAlert(`Conciliação concluída! ${r.total_confirmed} lançamento(s) contabilizado(s) no Diário e ${r.rules_learned} padrão(ões) memorizado(s).`);
+    await loadReconciliationData();
+    await loadJournalEntries();
+    await loadDashboard();
+  } catch (err) {
+    showAlert('Erro ao contabilizar conciliação: ' + err.message, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-check-double"></i><span>Confirmar e Contabilizar Selecionados</span>';
+    }
+  }
+}
+
+function renderReconciledOFXTable() {
+  const tbody = document.getElementById('reconciliationTableBody');
+  if (!tbody) return;
+
+  if (ofxReconciledItemsCache.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-400">Nenhuma transação conciliada para esta conta.</td></tr>';
+    return;
+  }
+
+  const accMap = new Map(cachedAccounts.map(a => [a.id, `${a.code} - ${a.name}`]));
+
+  tbody.innerHTML = ofxReconciledItemsCache.map(item => {
+    const isInflow = item.type === 'DEBIT';
+    const counterpartLabel = item.counterpart_account_id ? (accMap.get(item.counterpart_account_id) || item.counterpart_account_id) : 'Contrapartida padrão';
+    const effectBadge = isInflow
+      ? '<span class="badge-credit px-2 py-0.5 rounded text-[10px] font-bold">ENTRADA</span>'
+      : '<span class="badge-debit px-2 py-0.5 rounded text-[10px] font-bold">SAÍDA</span>';
+
+    return `
       <tr class="hover:bg-slate-50 transition">
-        <td class="px-4 py-2.5 font-mono text-indigo-700">${item.fitid}</td>
+        <td class="px-4 py-2.5 font-mono text-indigo-700">${escapeHTML(item.fitid)}</td>
         <td class="px-4 py-2.5">${new Date(item.date).toLocaleDateString('pt-BR')}</td>
-        <td class="px-4 py-2.5 text-slate-700">${item.memo}</td>
+        <td class="px-4 py-2.5 text-slate-700 font-sans">${escapeHTML(item.memo)}</td>
+        <td class="px-4 py-2.5">${effectBadge}</td>
         <td class="px-4 py-2.5 text-right font-bold">${formatBRL(item.amount)}</td>
-        <td class="px-4 py-2.5">${item.type === 'DEBIT' ? '<span class="badge-debit px-2 py-0.5 rounded text-[10px] font-bold">DÉBITO</span>' : '<span class="badge-credit px-2 py-0.5 rounded text-[10px] font-bold">CRÉDITO</span>'}</td>
+        <td class="px-4 py-2.5 font-sans text-slate-700">${escapeHTML(counterpartLabel)}</td>
         <td class="px-4 py-2.5 text-center"><span class="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded">CONCILIADO</span></td>
       </tr>
-    `).join('');
-  } catch (err) {
-    console.error('Erro ao listar reconciliação:', err);
+    `;
+  }).join('');
+}
+
+function renderOFXRulesTable() {
+  const tbody = document.getElementById('ofxRulesTableBody');
+  if (!tbody) return;
+
+  if (ofxRulesCache.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-slate-400">Nenhuma regra memorizada ainda. Ao classificar e confirmar itens com "Memorizar" marcado, o sistema aprende automaticamente.</td></tr>';
+    return;
   }
+
+  tbody.innerHTML = ofxRulesCache.map(rule => {
+    const dirBadge = rule.direction === 'INFLOW'
+      ? '<span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-[10px] font-bold">+ ENTRADA</span>'
+      : '<span class="bg-rose-100 text-rose-800 px-2 py-0.5 rounded text-[10px] font-bold">- SAÍDA</span>';
+
+    return `
+      <tr class="hover:bg-slate-50 transition">
+        <td class="px-4 py-2.5 font-mono font-semibold text-slate-800">${escapeHTML(rule.pattern)}</td>
+        <td class="px-4 py-2.5">${dirBadge}</td>
+        <td class="px-4 py-2.5 font-semibold text-indigo-800">${escapeHTML(rule.counterpart_account_code)} - ${escapeHTML(rule.counterpart_account_name)}</td>
+        <td class="px-4 py-2.5 text-center font-mono">${rule.hit_count}x</td>
+        <td class="px-4 py-2.5 text-center">
+          <button type="button" onclick="deleteOFXRule('${rule.id}')" class="text-rose-600 hover:text-rose-800 text-xs font-semibold px-2 py-1 rounded hover:bg-rose-50 transition" title="Excluir regra memorizada">
+            <i class="fa-solid fa-trash-can"></i> Excluir
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+async function deleteOFXRule(ruleId) {
+  if (!currentCompanyId) return;
+  try {
+    const res = await fetch(`/api/v1/companies/${currentCompanyId}/reconciliation/rules/${ruleId}`, {
+      method: 'DELETE'
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) throw new Error(json.error?.message || 'Falha ao excluir regra');
+    showAlert('Regra removida com sucesso.');
+    await loadReconciliationData();
+  } catch (err) {
+    showAlert('Erro ao excluir regra: ' + err.message, 'error');
+  }
+}
+
+function downloadSampleOFX() {
+  const today = new Date().toISOString().split('T')[0].replace(/-/g, '');
+  const uid = Math.floor(Math.random() * 9000 + 1000);
+  const sampleOFX = `OFXHEADER:100
+DATA:OFXSGML
+VERSION:102
+SECURITY:NONE
+ENCODING:USASCII
+CHARSET:1252
+COMPRESSION:NONE
+OLDFILEUID:NONE
+NEWFILEUID:NONE
+
+<OFX>
+<BANKMSGSRSV1>
+<STMTTRNRS>
+<STMTRS>
+<CURDEF>BRL
+<BANKACCTFROM>
+<BANKID>001
+<BRANCHID>1234
+<ACCTID>98765-4
+</BANKACCTFROM>
+<BANKTRANLIST>
+<STMTTRN>
+<TRNTYPE>CREDIT
+<DTPOSTED>${today}120000[-03:EST]
+<TRNAMT>5450.75
+<FITID>${today}${uid}01
+<MEMO>PIX RECEBIDO CLIENTE MONTE CARMELO
+</STMTTRN>
+<STMTTRN>
+<TRNTYPE>DEBIT
+<DTPOSTED>${today}143000[-03:EST]
+<TRNAMT>-1250.30
+<FITID>${today}${uid}02
+<MEMO>PGTO FORNECEDOR CEMIG ENERGIA
+</STMTTRN>
+<STMTTRN>
+<TRNTYPE>DEBIT
+<DTPOSTED>${today}160000[-03:EST]
+<TRNAMT>-89.90
+<FITID>${today}${uid}03
+<MEMO>TARIFA BANCARIA CESTA PJ
+</STMTTRN>
+</BANKTRANLIST>
+</STMTRS>
+</STMTTRNRS>
+</BANKMSGSRSV1>
+</OFX>`;
+
+  const blob = new Blob([sampleOFX], { type: 'application/x-ofx;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `extrato_exemplo_nortabil_${today}.ofx`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 // ==========================================
@@ -1600,10 +2031,46 @@ function initKeyboardAccessibility() {
         }
       });
     }
+
+    // Focus trap restrito ao #loginScreen quando ativo e sem modal sobreposto
+    if (e.key === 'Tab') {
+      const loginScreen = document.getElementById('loginScreen');
+      const modalLegal = document.getElementById('modalLegal');
+      const isLoginVisible = loginScreen && !loginScreen.classList.contains('hidden');
+      const isLegalOpen = modalLegal && !modalLegal.classList.contains('hidden');
+
+      if (isLoginVisible && !isLegalOpen) {
+        const focusable = Array.from(
+          loginScreen.querySelectorAll(
+            'button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          )
+        ).filter(el => el.offsetParent !== null);
+
+        if (focusable.length > 0) {
+          const firstEl = focusable[0];
+          const lastEl = focusable[focusable.length - 1];
+
+          if (e.shiftKey) {
+            if (document.activeElement === firstEl || !loginScreen.contains(document.activeElement)) {
+              e.preventDefault();
+              lastEl.focus();
+            }
+          } else {
+            if (document.activeElement === lastEl || !loginScreen.contains(document.activeElement)) {
+              e.preventDefault();
+              firstEl.focus();
+            }
+          }
+        }
+      }
+    }
   });
 }
 
+let lastLegalTrigger = null;
+
 function openLegalModal(section = 'privacy') {
+  lastLegalTrigger = document.activeElement;
   openModal('modalLegal');
   switchLegalSection(section);
 }

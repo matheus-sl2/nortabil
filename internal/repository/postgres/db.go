@@ -29,6 +29,9 @@ var migration005 string
 //go:embed migrations/006_create_users_and_auth.sql
 var migration006 string
 
+//go:embed migrations/007_create_reconciliation_rules.sql
+var migration007 string
+
 // DB encapsula o pool de conexões pgxpool
 type DB struct {
 	Pool *pgxpool.Pool
@@ -102,6 +105,11 @@ func (db *DB) RunMigrations(ctx context.Context, autoSeed bool) error {
 	log.Println("[MIGRAÇÃO] Aplicando controle de usuários e autenticação RBAC (006_create_users_and_auth.sql)...")
 	if _, err := db.Pool.Exec(ctx, migration006); err != nil {
 		return fmt.Errorf("erro na migração 006 (usuários e auth): %w", err)
+	}
+
+	log.Println("[MIGRAÇÃO] Aplicando regras de classificação bancária (007_create_reconciliation_rules.sql)...")
+	if _, err := db.Pool.Exec(ctx, migration007); err != nil {
+		return fmt.Errorf("erro na migração 007 (regras de conciliação): %w", err)
 	}
 
 	if autoSeed {

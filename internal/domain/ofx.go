@@ -32,19 +32,46 @@ type OFXStatement struct {
 	Transactions []OFXTransaction `json:"transactions"`
 }
 
+// Direções de fluxo bancário para regras de classificação
+const (
+	DirectionInflow  = "INFLOW"  // Entrada de dinheiro no banco (Contábil: Débito no Banco / Crédito na Contrapartida)
+	DirectionOutflow = "OUTFLOW" // Saída de dinheiro do banco (Contábil: Crédito no Banco / Débito na Contrapartida)
+)
+
 // BankStatementItem entidade de persistência da transação para conciliação
 type BankStatementItem struct {
-	ID             uuid.UUID       `json:"id"`
-	CompanyID      uuid.UUID       `json:"company_id"`
-	BankAccountID  uuid.UUID       `json:"bank_account_id"`
-	FITID          string          `json:"fitid"`
-	Date           time.Time       `json:"date"`
-	Amount         decimal.Decimal `json:"amount"`
-	Type           JournalLineType `json:"type"` // DEBIT ou CREDIT
-	Memo           string          `json:"memo"`
-	JournalEntryID *uuid.UUID      `json:"journal_entry_id,omitempty"`
-	Reconciled     bool            `json:"reconciled"`
-	CreatedAt      time.Time       `json:"created_at"`
+	ID                   uuid.UUID       `json:"id"`
+	CompanyID            uuid.UUID       `json:"company_id"`
+	BankAccountID        uuid.UUID       `json:"bank_account_id"`
+	FITID                string          `json:"fitid"`
+	Date                 time.Time       `json:"date"`
+	Amount               decimal.Decimal `json:"amount"`
+	Type                 JournalLineType `json:"type"` // Na visão da conta contábil do Banco: DEBIT (entrada) ou CREDIT (saída)
+	Memo                 string          `json:"memo"`
+	CheckNum             string          `json:"checknum,omitempty"`
+	CounterpartAccountID *uuid.UUID      `json:"counterpart_account_id,omitempty"`
+	JournalEntryID       *uuid.UUID      `json:"journal_entry_id,omitempty"`
+	Reconciled           bool            `json:"reconciled"`
+	CreatedAt            time.Time       `json:"created_at"`
+
+	// Campos calculados em memória para auxiliar a triagem na UI
+	Direction            string     `json:"direction,omitempty"`
+	SuggestedAccountID   *uuid.UUID `json:"suggested_account_id,omitempty"`
+	SuggestedRulePattern string     `json:"suggested_rule_pattern,omitempty"`
+}
+
+// ReconciliationRule representa uma regra aprendida de classificação (De-Para histórico -> conta contábil)
+type ReconciliationRule struct {
+	ID                     uuid.UUID `json:"id"`
+	CompanyID              uuid.UUID `json:"company_id"`
+	Pattern                string    `json:"pattern"`
+	Direction              string    `json:"direction"` // INFLOW ou OUTFLOW
+	CounterpartAccountID   uuid.UUID `json:"counterpart_account_id"`
+	CounterpartAccountCode string    `json:"counterpart_account_code,omitempty"`
+	CounterpartAccountName string    `json:"counterpart_account_name,omitempty"`
+	HitCount               int       `json:"hit_count"`
+	CreatedAt              time.Time `json:"created_at"`
+	UpdatedAt              time.Time `json:"updated_at"`
 }
 
 // OFXImportSummary resumo do processamento do extrato bancário
@@ -53,6 +80,67 @@ type OFXImportSummary struct {
 	TotalImported   int `json:"total_imported"`
 	TotalDuplicates int `json:"total_duplicates"`
 	TotalFailed     int `json:"total_failed"`
+}
+
+var (
+	reDatePattern   = regexp.MustCompile(`\b\d{2}/\d{2}(?:/\d{2,4})?\b`)
+	reLongDigits    = regexp.MustCompile(`\b\d{5,}\b`)
+	reMultiSpaces   = regexp.MustCompile(`\s+`)
+)
+
+// NormalizeMemoPattern extrai um padrão limpo do histórico bancário para aprendizado de regras
+func NormalizeMemoPattern(memo string) string {
+	clean := strings.ToUpper(strings.TrimSpace(memo))
+	if clean == "" {
+		return ""
+	}
+	clean = reDatePattern.ReplaceAllString(clean, " ")
+	clean = reLongDigits.ReplaceAllString(clean, " ")
+	clean = strings.Trim(reMultiSpaces.ReplaceAllString(clean, " "), " -:/")
+	if len(clean) < 3 {
+		return strings.ToUpper(strings.TrimSpace(memo))
+	}
+	return clean
+}
+
+// MatchReconciliationRule encontra a melhor regra aprendida compatível com o histórico e direção
+func MatchReconciliationRule(memo string, direction string, rules []ReconciliationRule) *ReconciliationRule {
+	norm := NormalizeMemoPattern(memo)
+	upperMemo := strings.ToUpper(strings.TrimSpace(memo))
+	if norm == "" && upperMemo == "" {
+		return nil
+	}
+
+	var bestExact *ReconciliationRule
+	var bestPartial *ReconciliationRule
+
+	for i := range rules {
+		r := &rules[i]
+		if r.Direction != direction || r.Pattern == "" {
+			continue
+		}
+		pat := strings.ToUpper(strings.TrimSpace(r.Pattern))
+
+		if pat == norm || pat == upperMemo {
+			if bestExact == nil || r.HitCount > bestExact.HitCount {
+				bestExact = r
+			}
+			continue
+		}
+
+		if (norm != "" && strings.Contains(norm, pat)) || (upperMemo != "" && strings.Contains(upperMemo, pat)) {
+			if bestPartial == nil ||
+				len(pat) > len(bestPartial.Pattern) ||
+				(len(pat) == len(bestPartial.Pattern) && r.HitCount > bestPartial.HitCount) {
+				bestPartial = r
+			}
+		}
+	}
+
+	if bestExact != nil {
+		return bestExact
+	}
+	return bestPartial
 }
 
 // ParseOFX faz o parsing de arquivos OFX bancários (versões 1.x SGML e 2.x XML)
